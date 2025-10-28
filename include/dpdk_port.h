@@ -11,8 +11,7 @@ struct dpdk_handle {
     struct rte_mempool *mbuf_pool;
 };
 
-int eal_bootstrap(const char* progname);
-int vdev_create(const struct app_config *conf);
+int vdev_create(const char *progname, const struct app_config *conf);
 int ports_configure(struct dpdk_handle *handle,
                     uint16_t rx_desc, uint16_t tx_desc,
                     uint32_t mbufs, uint32_t cache);

@@ -6,34 +6,31 @@
 #include <rte_ethdev.h>
 #include <rte_mbuf.h>
 #include <rte_mempool.h>
-#include <rte_vdev.h>
 
 #include "constants.h"
 #include "dpdk_port.h"
 
-int eal_bootstrap(const char *progname){
-    const char *args[] = {progname, "-l", "0", "-n", "1", "--proc-type=auto"};
-    int argc = (int)(sizeof(args) / sizeof(args[0]));
-    char **argv = (char**)args;
-    int rc = rte_eal_init(argc, argv);
-    if (rc < 0) fprintf(stderr, "EAL init fauled\n");
-    return rc < 0 ? -1 : 0;
-}
 
-int vdev_create(const struct app_config *conf){
-    if (cfg->pmd == PMD_TAP) {
-        char a[128], b[128];
-        snprintf(a, sizeof(a), "iface=%s", cfg->lan_name);
-        snprintf(b, sizeof(b), "iface=%s", cfg->wan_name);
-        if (rte_vdev_init("net_tap0", a) < 0) { fprintf(stderr, "tap lan vdev failed\n"); return -1; }
-        if (rte_vdev_init("net_tap1", b) < 0) { fprintf(stderr, "tap wan vdev failed\n"); return -1; }
-    } else if (cfg->pmd == PMD_AFPKT) {
-        char a[128], b[128];
-        snprintf(a, sizeof(a), "iface=%s", cfg->lan_name);
-        snprintf(b, sizeof(b), "iface=%s", cfg->wan_name);
-        if (rte_vdev_init("net_af_packet0", a) < 0) { fprintf(stderr, "af_packet lan vdev failed\n"); return -1; }
-        if (rte_vdev_init("net_af_packet1", b) < 0) { fprintf(stderr, "af_packet wan vdev failed\n"); return -1; }
+int vdev_create(const char* progname, const struct app_config *conf){
+    static char v0[128], v1[128];
+
+    const char *base[] = { (char*)progname, "-l", "0", "-n", "1", "--proc-type=auto" };
+    char *argv[16];
+    int argc = 0;
+    for (size_t i = 0; i < sizeof(base)/sizeof(base[0]); ++i) argv[argc++] = (char*)base[i];
+
+    if (conf->pmd == PMD_TAP) {
+        snprintf(v0, sizeof(v0), "--vdev=net_tap0,iface=%s", conf->lan_name);
+        snprintf(v1, sizeof(v1), "--vdev=net_tap1,iface=%s", conf->wan_name);
+        argv[argc++] = v0; argv[argc++] = v1;
+    } else if (conf->pmd == PMD_AFPKT) {
+        snprintf(v0, sizeof(v0), "--vdev=net_af_packet0,iface=%s", conf->lan_name);
+        snprintf(v1, sizeof(v1), "--vdev=net_af_packet1,iface=%s", conf->wan_name);
+        argv[argc++] = v0; argv[argc++] = v1;
     }
+
+    int rc = rte_eal_init(argc, argv);
+    if (rc < 0) { fprintf(stderr, "EAL init failed\n"); return -1; }
     return 0;
 }
 
@@ -71,8 +68,8 @@ int ports_configure(struct dpdk_handle *handle,
 
     uint16_t n = rte_eth_dev_count_avail();
     if (n < 2) { fprintf(stderr, "need >= 2 DPDK ports, have %u\n", n); return -1; }
-    h->lan_port = 0;
-    h->wan_port = 1;
+    handle->lan_port = 0;
+    handle->wan_port = 1;
 
     struct rte_eth_conf conf;
     memset(&conf, 0, sizeof(conf));
@@ -83,7 +80,7 @@ int ports_configure(struct dpdk_handle *handle,
         int rc = rte_eth_dev_configure(p, 1, 1, &conf);
         if (rc < 0) { fprintf(stderr, "dev_configure(%u)=%d\n", p, rc); return -1; }
 
-        rc = rte_eth_rx_queue_setup(p, 0, rx_desc, rte_eth_dev_socket_id(p), NULL, h->mbuf_pool);
+        rc = rte_eth_rx_queue_setup(p, 0, rx_desc, rte_eth_dev_socket_id(p), NULL, handle->mbuf_pool);
         if (rc < 0) { fprintf(stderr, "rx_queue_setup(%u)=%d\n", p, rc); return -1; }
 
         rc = rte_eth_tx_queue_setup(p, 0, tx_desc, rte_eth_dev_socket_id(p), NULL);
@@ -96,8 +93,8 @@ int ports_configure(struct dpdk_handle *handle,
     }
 
     sleep(1);
-    port_print_info(h->lan_port, "LAN");
-    port_print_info(h->wan_port, "WAN");
+    port_print_info(handle->lan_port, "LAN");
+    port_print_info(handle->wan_port, "WAN");
 
     return 0;
 }

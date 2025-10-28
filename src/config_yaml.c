@@ -14,7 +14,7 @@ static uint32_t parse_ip(const char *addr, uint32_t* out){
 }
 
 static int parse_cidr(const char* cidr, uint32_t *out_ip, uint32_t *out_mask){
-    char buf[64];
+    char buf[CIDR_BUF_LEN];
     strncpy(buf, cidr, sizeof(buf));
     buf[sizeof(buf) - 1] = 0;
 
@@ -56,12 +56,14 @@ static const char* scalar(yaml_node_t *node){
 
 static void load_dnat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_config *conf){
     if (!seq || seq ->type!=YAML_SEQUENCE_NODE) return;
-    for (yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->dnat_cnt < 64; ++it){
+    for (yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->dnat_cnt < NAT_MAX_DNAT_RULES; ++it){
         yaml_node_t *item  = yaml_document_get_node(doc, *it);
         const char *s_port = scalar(map_get(doc,item,"port"));
         const char *s_to   = scalar(map_get(doc,item,"to"));
         if(!s_port || !s_to) continue;
-        unsigned ext = atoi(s_port); char ip[64]; unsigned prt=0;
+        unsigned ext = atoi(s_port); 
+        char ip[CIDR_BUF_LEN]; 
+        unsigned prt=0;
         if (sscanf(s_to,"%63[^:]:%u",ip,&prt) == 2){
             conf->dnat[conf->dnat_cnt].egr_port  = htons((uint16_t)ext);
             conf->dnat[conf->dnat_cnt].ing_port = htons((uint16_t)prt);
@@ -73,7 +75,7 @@ static void load_dnat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_con
 
 static void load_snat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_config *conf){
   if(!seq || seq->type!=YAML_SEQUENCE_NODE) return;
-  for(yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->snat_cnt < 64; ++it){
+  for(yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->snat_cnt < NAT_MAX_SNAT_RULES; ++it){
     yaml_node_t *item = yaml_document_get_node(doc,*it);
     const char *from  = scalar(map_get(doc,item,"from"));
     const char *out   = scalar(map_get(doc,item,"out"));
@@ -91,10 +93,10 @@ static void load_snat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_con
 
 int cfg_load(const char *path, struct app_config *c){
     memset(c, 0, sizeof(*c));
-    c->to.tcp_established = 300;
-    c->to.tcp_transitory  = 30;
-    c->to.udp             = 30;
-    c->to.icmp            = 10;
+    c->to.tcp_established = DEFAULT_TCP_ESTABLISHED;
+    c->to.tcp_transitory  = DEFAULT_TCP_TRANSITORY;
+    c->to.udp             = DEFAULT_UDP_TIMEOUT;
+    c->to.icmp            = DEFAULT_ICMP_TIMEOUT;
 
     FILE *f = fopen(path, "rb"); if(!f) return -1;
     yaml_parser_t parser;
@@ -152,7 +154,7 @@ int cfg_load(const char *path, struct app_config *c){
     if(lcs && lcs->type==YAML_SEQUENCE_NODE){
     for(yaml_node_item_t *i=lcs->data.sequence.items.start; i && i<lcs->data.sequence.items.top; ++i){
         yaml_node_t *v=yaml_document_get_node(&doc,*i);
-        const char *s=scalar(v); if(!s) continue; int lc=atoi(s); if(lc>=0 && lc<64) c->lcore_mask |= (1ULL<<lc);
+        const char *s=scalar(v); if(!s) continue; int lc=atoi(s); if(lc>=0 && lc<LCORE_MASK_BITS) c->lcore_mask |= (1ULL<<lc);
     }
     }
 

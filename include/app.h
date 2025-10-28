@@ -2,6 +2,7 @@
 #ifndef APP_H
 #define APP_H
 #include <stdint.h>
+#include "constants.h"
 
 struct timeout_cfg {
     uint32_t tcp_established;
@@ -19,7 +20,7 @@ struct nat_rule_dnat {
 struct nat_rule_snat {
     uint32_t int_net;
     uint32_t int_mask;
-    char out_if[16];
+    char out_if[OUT_IF_NAME_MAX_LEN];
     uint32_t ext_ip;
 };
 
@@ -29,19 +30,19 @@ struct app_config {
         PMD_AFPKT,
         PMD_PHYS
     } pmd;
-    char lan_name[64];
-    char wan_name[64];
+    char lan_name[IF_NAME_MAX_LEN];
+    char wan_name[IF_NAME_MAX_LEN];
     uint32_t lan_net, lan_mask;
     uint32_t wan_net, wan_mask;
     uint32_t public_ip;
 
     int hairpin;
-    struct nat_rule_snat snat[64]; uint8_t snat_cnt;
-    struct nat_rule_dnat dnat[64]; uint8_t dnat_cnt;
+    struct nat_rule_snat snat[NAT_MAX_SNAT_RULES]; uint8_t snat_cnt;
+    struct nat_rule_dnat dnat[NAT_MAX_DNAT_RULES]; uint8_t dnat_cnt;
 
     struct timeout_cfg to;
     int use_metrics;
-    char metrics_addr[64];
+    char metrics_addr[METRICS_ADDR_MAX_LEN];
     uint16_t metrics_port;
 
     uint64_t lcore_mask;

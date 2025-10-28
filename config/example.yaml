@@ -1,0 +1,40 @@
+pmd:
+  mode: tap
+
+interfaces:
+  lan: tap-lan
+  wan: tap-wan
+
+ips:
+  lan: 192.168.10.1/24
+  wan: 203.0.113.1/24
+  public: 203.0.113.10
+
+nat:
+  hairpin: true
+  snat:
+    - from: 192.168.10.0/24
+      out: wan
+      to: 203.0.113.10
+  dnat:
+    - port: 22
+      to: 192.168.10.20:22
+    - port: 8080
+      to: 192.168.10.30:80
+
+timeouts:
+  tcp:
+    established: 300
+    transitory: 30
+  udp: 30
+  icmp: 10
+
+
+workers:
+  lcores: [1,2]
+
+
+metrics:
+  enabled: true
+  addr: 0.0.0.0
+  port: 9109

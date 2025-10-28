@@ -14,7 +14,13 @@
 #define CIDR_BUF_LEN              64
 
 #define DEFAULT_TCP_ESTABLISHED   300U
-#define DEFAULT_TCP_TRANSITORY     30U
-#define DEFAULT_UDP_TIMEOUT        30U
-#define DEFAULT_ICMP_TIMEOUT       10U
+#define DEFAULT_TCP_TRANSITORY    30U
+#define DEFAULT_UDP_TIMEOUT       30U
+#define DEFAULT_ICMP_TIMEOUT      10U
+
+#define DPDK_RX_DESC              1024
+#define DPDK_TX_DESC              1024
+#define DPDK_MBUF_COUNT           8192
+#define DPDK_MBUF_CACHE           256
+#define DPDK_BURST                64
 #endif

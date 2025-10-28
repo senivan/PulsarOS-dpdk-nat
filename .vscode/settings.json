@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "rte_mempool.h": "c",
+        "rte_eal.h": "c"
+    }
+}

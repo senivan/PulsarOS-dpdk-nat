@@ -8,20 +8,20 @@ struct timeout_cfg {
     uint32_t tcp_transitory;
     uint32_t udp;
     uint32_t icmp;
-}
+};
 
 struct nat_rule_dnat {
     uint16_t ing_port;
     uint16_t egr_port;
     uint32_t internal_ip;
-}
+};
 
 struct nat_rule_snat {
     uint32_t int_net;
     uint32_t int_mask;
     char out_if[16];
     uint32_t ext_ip;
-}
+};
 
 struct app_config {
     enum {
@@ -37,10 +37,10 @@ struct app_config {
 
     int hairpin;
     struct nat_rule_snat snat[64]; uint8_t snat_cnt;
-    struct nat_rule_snat dnat[64]; uint8_t dnat_cnt;
+    struct nat_rule_dnat dnat[64]; uint8_t dnat_cnt;
 
     struct timeout_cfg to;
-    bool use_metrics;
+    int use_metrics;
     char metrics_addr[64];
     uint16_t metrics_port;
 

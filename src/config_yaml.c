@@ -13,7 +13,7 @@ static uint32_t parse_ip(const char *addr, uint32_t* out){
     return 0;
 }
 
-static int parse_cidr(const char* cidr, uint32_t out_ip, uint32_t out_mask){
+static int parse_cidr(const char* cidr, uint32_t *out_ip, uint32_t *out_mask){
     char buf[64];
     strncpy(buf, cidr, sizeof(buf));
     buf[sizeof(buf) - 1] = 0;
@@ -42,7 +42,7 @@ static yaml_node_t* map_get(yaml_document_t *doc, yaml_node_t *map, const char *
     for (yaml_node_pair_t *pair=map->data.mapping.pairs.start; 
             pair && pair < map->data.mapping.pairs.top; 
             ++pair){
-        yaml_node_t *k = yaml_document_get_node(doc, pair->k);
+        yaml_node_t *k = yaml_document_get_node(doc, pair->key);
         if(k && k->type == YAML_SCALAR_NODE && k->data.scalar.value
             && strcmp((char*)k->data.scalar.value,key) == 0)
             return yaml_document_get_node(doc, pair->value);
@@ -57,41 +57,44 @@ static const char* scalar(yaml_node_t *node){
 static void load_dnat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_config *conf){
     if (!seq || seq ->type!=YAML_SEQUENCE_NODE) return;
     for (yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->dnat_cnt < 64; ++it){
-        yaml_node_t *item  = yaml_get_document_get_node(doc, *it);
+        yaml_node_t *item  = yaml_document_get_node(doc, *it);
         const char *s_port = scalar(map_get(doc,item,"port"));
         const char *s_to   = scalar(map_get(doc,item,"to"));
         if(!s_port || !s_to) continue;
         unsigned ext = atoi(s_port); char ip[64]; unsigned prt=0;
         if (sscanf(s_to,"%63[^:]:%u",ip,&prt) == 2){
-            c->dnat[c->dnat_cnt].ext_port  = htons((uint16_t)ext);
-            c->dnat[c->dnat_cnt].int_port  = htons((uint16_t)prt);
-            c->dnat[c->dnat_cnt].int_ip_be = parse_ip(ip);
-            c->dnat_cnt++;
+            conf->dnat[conf->dnat_cnt].egr_port  = htons((uint16_t)ext);
+            conf->dnat[conf->dnat_cnt].ing_port = htons((uint16_t)prt);
+            parse_ip(ip, &conf->dnat[conf->dnat_cnt].internal_ip);
+            conf->dnat_cnt++;
         }
     }
 }
 
 static void load_snat_seq(yaml_document_t *doc, yaml_node_t *seq, struct app_config *conf){
   if(!seq || seq->type!=YAML_SEQUENCE_NODE) return;
-  for(yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && c->snat_cnt < 64; ++it){
+  for(yaml_node_item_t *it = seq->data.sequence.items.start; it && it < seq -> data.sequence.items.top && conf->snat_cnt < 64; ++it){
     yaml_node_t *item = yaml_document_get_node(doc,*it);
     const char *from  = scalar(map_get(doc,item,"from"));
     const char *out   = scalar(map_get(doc,item,"out"));
     const char *to    = scalar(map_get(doc,item,"to"));
 
     if(!from) continue;
-    parse_cidr(from, &c->snat[c->snat_cnt].net_be, &c->snat[c->snat_cnt].mask_be);
+    parse_cidr(from, &conf->snat[conf->snat_cnt].int_net, &conf->snat[conf->snat_cnt].int_mask);
     if(out) {
-        strncpy(c->snat[c->snat_cnt].out_if,out, sizeof(c->snat[c->snat_cnt].out_if));
+        strncpy(conf->snat[conf->snat_cnt].out_if,out, sizeof(conf->snat[conf->snat_cnt].out_if));
     }
-    c->snat[c->snat_cnt].to_ip_be = to ? parse_ip(to) : c->public_ip_be;
-    c->snat_cnt++;
+    to ? parse_ip(to, &conf->snat[conf->snat_cnt].ext_ip) : conf->public_ip;
+    conf->snat_cnt++;
   }
 }
 
 int cfg_load(const char *path, struct app_config *c){
     memset(c, 0, sizeof(*c));
-    c->to(struct timeouts_cfg){300, 30, 30 ,10};
+    c->to.tcp_established = 300;
+    c->to.tcp_transitory  = 30;
+    c->to.udp             = 30;
+    c->to.icmp            = 10;
 
     FILE *f = fopen(path, "rb"); if(!f) return -1;
     yaml_parser_t parser;
@@ -120,9 +123,9 @@ int cfg_load(const char *path, struct app_config *c){
     const char *lan_cidr=scalar(map_get(&doc,ips,"lan"));
     const char *wan_cidr=scalar(map_get(&doc,ips,"wan"));
     const char *pub_ip  =scalar(map_get(&doc,ips,"public"));
-    if(lan_cidr) parse_cidr(lan_cidr,&c->lan_ip_be,&c->lan_mask_be);
-    if(wan_cidr) parse_cidr(wan_cidr,&c->wan_ip_be,&c->wan_mask_be);
-    if(pub_ip)   c->public_ip_be=parse_ip(pub_ip);
+    if(lan_cidr) parse_cidr(lan_cidr,&c->lan_net,&c->lan_mask);
+    if(wan_cidr) parse_cidr(wan_cidr,&c->wan_net,&c->wan_mask);
+    if(pub_ip)   parse_ip(pub_ip, &c->public_ip);
 
     // nat
     yaml_node_t *nat=map_get(&doc,root,"nat");
@@ -169,10 +172,10 @@ int cfg_load(const char *path, struct app_config *c){
 int cfg_validate(const struct app_config *c){
   int ok=1;
   if(!c->lan_name[0] || !c->wan_name[0]){ fprintf(stderr,"config: interfaces.lan/wan required\n"); ok=0; }
-  if(!c->lan_ip_be || !c->wan_ip_be){ fprintf(stderr,"config: ips.lan/ips.wan required\n"); ok=0; }
-  if(!c->public_ip_be && c->snat_cnt==0){ fprintf(stderr,"config: ips.public or nat.snat[].to required\n"); ok=0; }
+  if(!c->lan_net|| !c->wan_net){ fprintf(stderr,"config: ips.lan/ips.wan required\n"); ok=0; }
+  if(!c->public_ip && c->snat_cnt==0){ fprintf(stderr,"config: ips.public or nat.snat[].to required\n"); ok=0; }
   for(int i=0;i<c->dnat_cnt;i++){
-    if(!c->dnat[i].int_ip_be || !c->dnat[i].ext_port || !c->dnat[i].int_port){
+    if(!c->dnat[i].ing_port || !c->dnat[i].egr_port || !c->dnat[i].internal_ip){
       fprintf(stderr,"config: dnat[%d] invalid\n", i); ok=0;
     }
   }

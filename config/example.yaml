@@ -1,9 +1,9 @@
 pmd:
-  mode: tap
+  mode: physical
 
 interfaces:
-  lan: tap-lan
-  wan: tap-wan
+  lan: ens19
+  wan: ens20
 
 ips:
   lan: 192.168.10.1/24

@@ -27,6 +27,7 @@ struct nat_rule_snat {
 struct interface {
     char name[IF_NAME_MAX_LEN];
     char pcie_addr[16];
+    uint32_t ip_addr;
 };
 
 struct arp_config {

@@ -5,14 +5,15 @@ interfaces:
   lan: 
     name: ens19
     pcie_addr: "0000:00:13.0"
+    ip: 192.168.10.1
   wan: 
     name: ens20
     pcie_addr: "0000:00:14.0"
+    ip: 203.0.113.10
 
 ips:
   lan: 192.168.10.1/24
   wan: 203.0.113.1/24
-  public: 203.0.113.10
 
 
 nat:

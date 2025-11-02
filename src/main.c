@@ -49,8 +49,8 @@ int main(int argc, char **argv) {
     if (cfg_load(cfgpath, &cfg) < 0 || cfg_validate(&cfg) < 0) return 1;
 
     struct if_state lan = {0}, wan = {0};
-    lan.ip_be = cfg.lan_net;
-    wan.ip_be = cfg.wan_net;
+    lan.ip_be = cfg.lan.ip_addr;
+    wan.ip_be = cfg.wan.ip_addr;
     lan.txq = 0; wan.txq = 0;
 
     if (vdev_create(argv[0], &cfg) < 0) return 1;

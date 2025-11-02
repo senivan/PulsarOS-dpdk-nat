@@ -5,14 +5,21 @@ interfaces:
   lan: 
     name: ens19
     pcie_addr: "0000:00:13.0"
+    mtu: 1500
   wan: 
     name: ens20
     pcie_addr: "0000:00:14.0"
+    mtu: 1500
 
 ips:
   lan: 192.168.10.1/24
   wan: 203.0.113.1/24
   public: 203.0.113.10
+
+routing:
+  routes:
+    - { dst: 192.168.10.0/24, egress: lan }
+    - { dst: 0.0.0.0/0, egress: wan, next_hop: 203.0.113.254 }
 
 nat:
   hairpin: true
@@ -37,6 +44,14 @@ timeouts:
 workers:
   lcores: [1,2]
 
+arp:
+  cache_size: 4096
+  reachable_ms: 30000
+  stale_ms: 120000
+  request_interval_ms: 1000
+  max_retries: 5
+  max_pending_per_neighbor: 32
+  gratuitous_on_start: 2
 
 metrics:
   enabled: true

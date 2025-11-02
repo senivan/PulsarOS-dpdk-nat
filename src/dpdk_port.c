@@ -28,9 +28,8 @@ int vdev_create(const char* progname, const struct app_config *conf){
         snprintf(v1, sizeof(v1), "--vdev=net_af_packet1,iface=%s", conf->wan.name);
         argv[argc++] = v0; argv[argc++] = v1;
     } else if (conf->pmd == PMD_PHYS){
-        snprintf(v0, sizeof(v0), "-a%s", conf->lan.pcie_addr);
-        snprintf(v1, sizeof(v1), "-a%s", conf->wan.pcie_addr);
-        argv[argc++] = v0; argv[argc++] = v1;
+        argv[argc++] = "-a"; argv[argc++] = (char*)conf->lan.pcie_addr;
+        argv[argc++] = "-a"; argv[argc++] = (char*)conf->wan.pcie_addr;
     }
 
     int rc = rte_eal_init(argc, argv);

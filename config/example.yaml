@@ -2,8 +2,12 @@ pmd:
   mode: physical
 
 interfaces:
-  lan: ens19
-  wan: ens20
+  lan: 
+    name: ens19
+    pcie_addr: "0000:00:13.0"
+  wan: 
+    name: ens20
+    pcie_addr: "0000:00:14.0"
 
 ips:
   lan: 192.168.10.1/24

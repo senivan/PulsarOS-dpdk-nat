@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <yaml.h>
+#include <ctype.h>
 #include "config.h"
 
 static uint32_t parse_ip(const char *addr, uint32_t* out){
@@ -10,6 +11,57 @@ static uint32_t parse_ip(const char *addr, uint32_t* out){
     int rc = inet_pton(AF_INET, addr, &a);
     if(rc != 1) return -1;
     *out = a.s_addr;
+    return 0;
+}
+
+enum { BDF_CANON_LEN = 12 };
+
+static int pcie_is_canon(const char *s) {
+    if (!s) return 0;
+    if (strlen(s) != BDF_CANON_LEN) return 0;
+    for (int i = 0; i < 12; i++) {
+        unsigned char c = (unsigned char)s[i];
+        switch (i) {
+            case 4: if (c != ':') return 0; break;
+            case 7: if (c != ':') return 0; break;
+            case 10: if (c != '.') return 0; break;
+            case 11: if (c < '0' || c > '7') return 0; break; 
+            default: if (!isxdigit(c)) return 0; break;
+        }
+    }
+    return 1;
+}
+
+
+static int copy_clean_pcie(const char *src, char *dst, size_t dst_sz, char *errbuf, size_t errsz) {
+    if (!src || !dst || dst_sz == 0) {
+        if (errbuf && errsz) snprintf(errbuf, errsz, "null src/dst");
+        return -1;
+    }
+
+    char tmp[32];
+    size_t n = strnlen(src, sizeof(tmp) - 1);
+    memcpy(tmp, src, n);
+    tmp[n] = '\0';
+
+    char *p = tmp;
+    while (*p && isspace((unsigned char)*p)) p++;
+
+    char *e = p + strlen(p);
+    while (e > p && isspace((unsigned char)e[-1])) e--;
+    *e = '\0';
+
+    if (!pcie_is_canon(p)) {
+        if (errbuf && errsz) snprintf(errbuf, errsz, "bad pcie '%s'", p);
+        return -1;
+    }
+
+    if (dst_sz < (size_t)BDF_CANON_LEN + 1) {
+        if (errbuf && errsz) snprintf(errbuf, errsz, "dst too small");
+        return -1;
+    }
+    memcpy(dst, p, BDF_CANON_LEN);
+    dst[BDF_CANON_LEN] = '\0';
     return 0;
 }
 
@@ -115,11 +167,29 @@ int cfg_load(const char *path, struct app_config *c){
 
     // interfaces
     yaml_node_t *ifc=map_get(&doc,root,"interfaces");
-    const char *lan=scalar(map_get(&doc,ifc,"lan"));
-    const char *wan=scalar(map_get(&doc,ifc,"wan"));
-    if(lan) strncpy(c->lan_name,lan,sizeof(c->lan_name));
-    if(wan) strncpy(c->wan_name,wan,sizeof(c->wan_name));
+    // const char *lan=scalar(map_get(&doc,ifc,"lan"));
+    // const char *wan=scalar(map_get(&doc,ifc,"wan"));
+    // if(lan) strncpy(c->lan_name,lan,sizeof(c->lan_name));
+    // if(wan) strncpy(c->wan_name,wan,sizeof(c->wan_name));
+    yaml_node_t *lan = map_get(&doc, ifc, "lan");
+    yaml_node_t *wan = map_get(&doc, ifc, "wan");
+    const char *lan_name = scalar(map_get(&doc, lan, "name"));
+    const char *wan_name = scalar(map_get(&doc, wan, "name"));
+    const char *lan_addr = scalar(map_get(&doc, lan, "pcie_addr"));
+    const char *wan_addr = scalar(map_get(&doc, wan, "pcie_addr"));
 
+    if(lan_name) strncpy(c->lan.name,lan_name,sizeof(c->lan.name));
+    if(wan_name) strncpy(c->wan.name, wan_name, sizeof(c->wan.name));
+    char err[64];
+
+    if (copy_clean_pcie(lan_addr, c->lan.pcie_addr, sizeof(c->lan.pcie_addr), err, sizeof(err)) != 0) {
+        fprintf(stderr, "config: lan pcie_addr invalid: %s\n", err);
+        return -1;
+    }
+    if (copy_clean_pcie(wan_addr, c->wan.pcie_addr, sizeof(c->wan.pcie_addr), err, sizeof(err)) != 0) {
+        fprintf(stderr, "config: wan pcie_addr invalid: %s\n", err);
+        return -1;
+    }
     // ips
     yaml_node_t *ips=map_get(&doc,root,"ips");
     const char *lan_cidr=scalar(map_get(&doc,ips,"lan"));
@@ -173,7 +243,7 @@ int cfg_load(const char *path, struct app_config *c){
 
 int cfg_validate(const struct app_config *c){
   int ok=1;
-  if(!c->lan_name[0] || !c->wan_name[0]){ fprintf(stderr,"config: interfaces.lan/wan required\n"); ok=0; }
+  if(!c->lan.name[0] || !c->wan.name[0]){ fprintf(stderr,"config: interfaces.lan/wan required\n"); ok=0; }
   if(!c->lan_net|| !c->wan_net){ fprintf(stderr,"config: ips.lan/ips.wan required\n"); ok=0; }
   if(!c->public_ip && c->snat_cnt==0){ fprintf(stderr,"config: ips.public or nat.snat[].to required\n"); ok=0; }
   for(int i=0;i<c->dnat_cnt;i++){

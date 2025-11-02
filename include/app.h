@@ -24,14 +24,21 @@ struct nat_rule_snat {
     uint32_t ext_ip;
 };
 
+struct interface {
+    char name[IF_NAME_MAX_LEN];
+    char pcie_addr[16];
+};
+
 struct app_config {
     enum {
         PMD_TAP,
         PMD_AFPKT,
         PMD_PHYS
     } pmd;
-    char lan_name[IF_NAME_MAX_LEN];
-    char wan_name[IF_NAME_MAX_LEN];
+    // char lan_name[IF_NAME_MAX_LEN];
+    // char wan_name[IF_NAME_MAX_LEN];
+    struct interface wan;
+    struct interface lan;
     uint32_t lan_net, lan_mask;
     uint32_t wan_net, wan_mask;
     uint32_t public_ip;

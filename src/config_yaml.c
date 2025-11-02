@@ -228,6 +228,23 @@ int cfg_load(const char *path, struct app_config *c){
     }
     }
 
+    // arp
+    yaml_node_t *arp = map_get(&doc, root, "arp");
+    const char *cache_size = scalar(map_get(&doc, arp, "cache_size"));
+    const char *reacheble = scalar(map_get(&doc, arp, "reachable_ms"));
+    const char *stale = scalar(map_get(&doc, arp, "stale_ms"));
+    const char *request = scalar(map_get(&doc, arp, "request_interval_ms"));
+    const char *retries = scalar(map_get(&doc, arp, "max_retries"));
+    const char *pending = scalar(map_get(&doc, arp, "max_pending_per_neighbor"));
+    const char *on_start = scalar(map_get(&doc, arp, "gratuitous_on_start"));
+    if(cache_size) c->arp.cache_size = atoi(cache_size);
+    if(reacheble) c->arp.reachable_ms = atoi(reacheble);
+    if(stale) c->arp.stale_ms = atoi(stale);
+    if(request) c->arp.request_interval_ms = atoi(request);
+    if(retries) c->arp.max_retries = atoi(retries);
+    if(pending) c->arp.max_pending_per_neighbor = atoi(pending);
+    if(on_start) c->arp.gratuitous_on_start = atoi(on_start);
+
     // metrics
     yaml_node_t *met=map_get(&doc,root,"metrics");
     const char *m_en=scalar(map_get(&doc,met,"enabled"));

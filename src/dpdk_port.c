@@ -38,8 +38,10 @@ int vdev_create(const char* progname, const struct app_config *conf){
     return 0;
 }
 
-static int create_pool(struct dpdk_handle *handle){
-    handle->mbuf_pool = rte_pktmbuf_pool_create("mbufs",
+static int create_pool(struct if_state *handle){
+    char name[32];
+    sprintf(name, "mbufs_%d",handle->port_id);
+    handle->mbuf_pool = rte_pktmbuf_pool_create(name,
                                                 DPDK_MBUF_COUNT,
                                                 DPDK_MBUF_CACHE,
                                                 0,
@@ -61,44 +63,56 @@ void port_print_info(uint16_t port_id, const char* tag){
         link.link_status ? "UP" : "DOWN", link.link_speed);
 }
 
-int ports_configure(struct dpdk_handle *handle,
+int ports_configure(struct if_state *lan, struct if_state *wan,
                     uint16_t rx_desc, uint16_t tx_desc,
                     uint32_t mbufs, uint32_t cache)
 {
     (void)mbufs;
     (void)cache;
 
-    if(create_pool(handle) < 0) return -1;
-
     uint16_t n = rte_eth_dev_count_avail();
     if (n < 2) { fprintf(stderr, "need >= 2 DPDK ports, have %u\n", n); return -1; }
-    handle->lan_port = 0;
-    handle->wan_port = 1;
+
+    lan->port_id = 0;
+    wan->port_id = 1;
+
+    if(create_pool(lan) < 0) return -1;
+    if(create_pool(wan) < 0) return -1;
 
     struct rte_eth_conf conf;
     memset(&conf, 0, sizeof(conf));
     conf.rxmode.mq_mode = RTE_ETH_MQ_RX_NONE;
     conf.txmode.mq_mode = RTE_ETH_MQ_TX_NONE;
 
-    for (uint16_t p = 0; p < 2; p++) {
-        int rc = rte_eth_dev_configure(p, 1, 1, &conf);
-        if (rc < 0) { fprintf(stderr, "dev_configure(%u)=%d\n", p, rc); return -1; }
+    // config LAN
+    int rc = rte_eth_dev_configure(lan->port_id, 1, 1, &conf);
+    if (rc < 0) { fprintf(stderr, "dev_configure(%u)=%d\n", lan->port_id, rc); return -1; }
+    rc = rte_eth_rx_queue_setup(lan->port_id, 0, rx_desc, rte_eth_dev_socket_id(lan->port_id), NULL, lan->mbuf_pool);
+    if (rc < 0) { fprintf(stderr, "rx_queue_setup(%u)=%d\n", lan->port_id, rc); return -1; }
+    rc = rte_eth_tx_queue_setup(lan->port_id, 0, tx_desc, rte_eth_dev_socket_id(lan->port_id), NULL);
+    if (rc < 0) { fprintf(stderr, "tx_queue_setup(%u)=%d\n", lan->port_id, rc); return -1; }
+    rc = rte_eth_dev_start(lan->port_id);
+    if (rc < 0) { fprintf(stderr, "dev_start(%u)=%d\n", lan->port_id, rc); return -1; }
+    rte_eth_promiscuous_enable(lan->port_id);
 
-        rc = rte_eth_rx_queue_setup(p, 0, rx_desc, rte_eth_dev_socket_id(p), NULL, handle->mbuf_pool);
-        if (rc < 0) { fprintf(stderr, "rx_queue_setup(%u)=%d\n", p, rc); return -1; }
-
-        rc = rte_eth_tx_queue_setup(p, 0, tx_desc, rte_eth_dev_socket_id(p), NULL);
-        if (rc < 0) { fprintf(stderr, "tx_queue_setup(%u)=%d\n", p, rc); return -1; }
-
-        rc = rte_eth_dev_start(p);
-        if (rc < 0) { fprintf(stderr, "dev_start(%u)=%d\n", p, rc); return -1; }
-
-        rte_eth_promiscuous_enable(p);
-    }
+    // config WAN
+    rc = rte_eth_dev_configure(wan->port_id, 1, 1, &conf);
+    if (rc < 0) { fprintf(stderr, "dev_configure(%u)=%d\n", wan->port_id, rc); return -1; }
+    rc = rte_eth_rx_queue_setup(wan->port_id, 0, rx_desc, rte_eth_dev_socket_id(wan->port_id), NULL, wan->mbuf_pool);
+    if (rc < 0) { fprintf(stderr, "rx_queue_setup(%u)=%d\n", wan->port_id, rc); return -1; }
+    rc = rte_eth_tx_queue_setup(wan->port_id, 0, tx_desc, rte_eth_dev_socket_id(wan->port_id), NULL);
+    if (rc < 0) { fprintf(stderr, "tx_queue_setup(%u)=%d\n", wan->port_id, rc); return -1; }
+    rc = rte_eth_dev_start(wan->port_id);
+    if (rc < 0) { fprintf(stderr, "dev_start(%u)=%d\n", wan->port_id, rc); return -1; }
+    rte_eth_promiscuous_enable(wan->port_id);
 
     sleep(1);
-    port_print_info(handle->lan_port, "LAN");
-    port_print_info(handle->wan_port, "WAN");
+    port_print_info(lan->port_id, "LAN");
+    port_print_info(wan->port_id, "WAN");
+    rte_eth_macaddr_get(lan->port_id, &lan->mac);
+    rte_eth_macaddr_get(wan->port_id, &wan->mac);
+
+    
 
     return 0;
 }

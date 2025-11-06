@@ -25,5 +25,5 @@
 #define DPDK_BURST                64
 
 #define NEIGH_SIZE 1024
-
+#define FIB_MAX_ROUTES 8
 #endif

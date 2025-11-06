@@ -25,6 +25,7 @@ add_executable(dpdk-router-nat
   src/arp.c
   src/config_yaml.c
   src/dpdk_port.c
+  src/neigh_t.c
   src/main.c
 )
 

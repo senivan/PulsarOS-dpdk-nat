@@ -59,13 +59,14 @@ int arp_handle(struct if_state *ifs, struct rte_mbuf *m) {
     if (!m) return 1;
     struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
     if (eth->ether_type != rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) return 0;
+    struct rte_arp_hdr   *arp = (struct rte_arp_hdr *)(eth + 1);
+    neigh_learn(&ifs->table, arp->arp_data.arp_sip, &arp->arp_data.arp_sha);
 
     if (is_arp_request_for_us(m, ifs->ip_be)) {
         send_arp_reply(ifs, m);     
         return 1;
     }
 
-    // TODO: learn neighbors from ARP req/rep.
     rte_pktmbuf_free(m);
     return 1;
 }

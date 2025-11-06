@@ -178,7 +178,7 @@ int cfg_load(const char *path, struct app_config *c){
     const char *lan_addr = scalar(map_get(&doc, lan, "pcie_addr"));
     const char *wan_addr = scalar(map_get(&doc, wan, "pcie_addr"));
     const char *lan_ip =  scalar(map_get(&doc, lan, "ip"));
-    const char *wan_ip =  scalar(map_get(&doc, lan, "ip"));
+    const char *wan_ip =  scalar(map_get(&doc, wan, "ip"));
 
     if(lan_name) strncpy(c->lan.name,lan_name,sizeof(c->lan.name));
     if(wan_name) strncpy(c->wan.name, wan_name, sizeof(c->wan.name));
@@ -192,8 +192,8 @@ int cfg_load(const char *path, struct app_config *c){
         fprintf(stderr, "config: wan pcie_addr invalid: %s\n", err);
         return -1;
     }
-    if(lan_ip) parse_ip(lan_ip, c->lan.ip_addr);
-    if(wan_ip) parse_ip(wan_ip, c->wan.ip_addr);
+    if(lan_ip) parse_ip(lan_ip, &c->lan.ip_addr);
+    if(wan_ip) parse_ip(wan_ip, &c->wan.ip_addr);
     // ips
     yaml_node_t *ips=map_get(&doc,root,"ips");
     const char *lan_cidr=scalar(map_get(&doc,ips,"lan"));

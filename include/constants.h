@@ -23,4 +23,7 @@
 #define DPDK_MBUF_COUNT           8192
 #define DPDK_MBUF_CACHE           256
 #define DPDK_BURST                64
+
+#define NEIGH_SIZE 1024
+
 #endif

@@ -4,13 +4,15 @@
 #include <stdint.h>
 #include <rte_mempool.h>
 #include "app.h"
+#include "neigh_t.h"
 
 struct if_state {
     uint16_t port_id;                     
     struct rte_ether_addr mac;            
     uint32_t ip_be;                       
     uint16_t txq;                         
-    struct rte_mempool *mbuf_pool;        
+    struct rte_mempool *mbuf_pool;  
+    struct neigh_table table;
 };
 
 int vdev_create(const char *progname, const struct app_config *conf);

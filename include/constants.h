@@ -26,4 +26,9 @@
 
 #define NEIGH_SIZE 1024
 #define FIB_MAX_ROUTES 8
+
+#define ICMP_ECHO_REQUEST 8
+#define ICMP_ECHO_REPLY   0
+
+
 #endif

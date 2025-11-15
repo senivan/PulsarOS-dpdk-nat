@@ -66,26 +66,26 @@ static int copy_clean_pcie(const char *src, char *dst, size_t dst_sz, char *errb
 }
 
 static int parse_cidr(const char* cidr, uint32_t *out_ip, uint32_t *out_mask){
-    char buf[CIDR_BUF_LEN];
-    strncpy(buf, cidr, sizeof(buf));
-    buf[sizeof(buf) - 1] = 0;
-
+    if (!cidr || !out_ip || !out_mask) return -1;
+    char buf[64];
+    if (strlen(cidr) >= sizeof(buf)) return -1;
+    strcpy(buf, cidr);
     char *slash = strchr(buf, '/');
-    int pfx = 32;
-    if(slash){
-        *slash = 0;
-        char *end = NULL;
-        long v = strtol(slash+1, &end, 10);
-        if(!end || *end != '\0' || v < 0 || v > 32) return -1;
-        pfx = (int)v;
-    }
+    if (!slash) return -1;
+    *slash = '\0';
+    int prefix = atoi(slash + 1);
+    if (prefix < 0 || prefix > 32) return -1;
 
-    uint32_t ip;
-    if (parse_ip(buf, &ip) != 0) return -1;
+    struct in_addr a;
+    if (inet_pton(AF_INET, buf, &a) != 1) return -1;
 
-    uint32_t host_mask = (pfx == 0) ? 0u : (~0u << (32 - pfx));
-    *out_ip = ip;
-    *out_mask = host_mask;
+    /* compute mask in host order, then convert to network order */
+    uint32_t mask_h = (prefix == 0) ? 0U : (0xFFFFFFFFu << (32 - prefix));
+    uint32_t ip_h   = ntohl(a.s_addr);
+    uint32_t net_h  = ip_h & mask_h;
+
+    *out_ip   = htonl(net_h);
+    *out_mask = htonl(mask_h);
     return 0;
 }
 
@@ -177,6 +177,8 @@ int cfg_load(const char *path, struct app_config *c){
     const char *wan_name = scalar(map_get(&doc, wan, "name"));
     const char *lan_addr = scalar(map_get(&doc, lan, "pcie_addr"));
     const char *wan_addr = scalar(map_get(&doc, wan, "pcie_addr"));
+    const char *lan_ip =  scalar(map_get(&doc, lan, "ip"));
+    const char *wan_ip =  scalar(map_get(&doc, wan, "ip"));
 
     if(lan_name) strncpy(c->lan.name,lan_name,sizeof(c->lan.name));
     if(wan_name) strncpy(c->wan.name, wan_name, sizeof(c->wan.name));
@@ -190,6 +192,8 @@ int cfg_load(const char *path, struct app_config *c){
         fprintf(stderr, "config: wan pcie_addr invalid: %s\n", err);
         return -1;
     }
+    if(lan_ip) parse_ip(lan_ip, &c->lan.ip_addr);
+    if(wan_ip) parse_ip(wan_ip, &c->wan.ip_addr);
     // ips
     yaml_node_t *ips=map_get(&doc,root,"ips");
     const char *lan_cidr=scalar(map_get(&doc,ips,"lan"));
@@ -227,6 +231,23 @@ int cfg_load(const char *path, struct app_config *c){
         const char *s=scalar(v); if(!s) continue; int lc=atoi(s); if(lc>=0 && lc<LCORE_MASK_BITS) c->lcore_mask |= (1ULL<<lc);
     }
     }
+
+    // arp
+    yaml_node_t *arp = map_get(&doc, root, "arp");
+    const char *cache_size = scalar(map_get(&doc, arp, "cache_size"));
+    const char *reacheble = scalar(map_get(&doc, arp, "reachable_ms"));
+    const char *stale = scalar(map_get(&doc, arp, "stale_ms"));
+    const char *request = scalar(map_get(&doc, arp, "request_interval_ms"));
+    const char *retries = scalar(map_get(&doc, arp, "max_retries"));
+    const char *pending = scalar(map_get(&doc, arp, "max_pending_per_neighbor"));
+    const char *on_start = scalar(map_get(&doc, arp, "gratuitous_on_start"));
+    if(cache_size) c->arp.cache_size = atoi(cache_size);
+    if(reacheble) c->arp.reachable_ms = atoi(reacheble);
+    if(stale) c->arp.stale_ms = atoi(stale);
+    if(request) c->arp.request_interval_ms = atoi(request);
+    if(retries) c->arp.max_retries = atoi(retries);
+    if(pending) c->arp.max_pending_per_neighbor = atoi(pending);
+    if(on_start) c->arp.gratuitous_on_start = atoi(on_start);
 
     // metrics
     yaml_node_t *met=map_get(&doc,root,"metrics");

@@ -23,4 +23,12 @@
 #define DPDK_MBUF_COUNT           8192
 #define DPDK_MBUF_CACHE           256
 #define DPDK_BURST                64
+
+#define NEIGH_SIZE 1024
+#define FIB_MAX_ROUTES 8
+
+#define ICMP_ECHO_REQUEST 8
+#define ICMP_ECHO_REPLY   0
+
+
 #endif

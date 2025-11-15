@@ -27,6 +27,17 @@ struct nat_rule_snat {
 struct interface {
     char name[IF_NAME_MAX_LEN];
     char pcie_addr[16];
+    uint32_t ip_addr;
+};
+
+struct arp_config {
+    size_t cache_size;
+    size_t reachable_ms;
+    size_t stale_ms;
+    size_t request_interval_ms;
+    size_t max_retries;
+    size_t max_pending_per_neighbor;
+    size_t gratuitous_on_start;
 };
 
 struct app_config {
@@ -46,6 +57,8 @@ struct app_config {
     int hairpin;
     struct nat_rule_snat snat[NAT_MAX_SNAT_RULES]; uint8_t snat_cnt;
     struct nat_rule_dnat dnat[NAT_MAX_DNAT_RULES]; uint8_t dnat_cnt;
+
+    struct arp_config arp;
 
     struct timeout_cfg to;
     int use_metrics;

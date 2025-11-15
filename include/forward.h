@@ -1,0 +1,15 @@
+#pragma once
+#ifndef FORWARD_H
+#define FORWARD_H
+
+#include <rte_mbuf.h>
+struct if_state;
+struct fi_table;
+
+int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
+                     const struct fi_table *fib, struct rte_mbuf *m);
+
+int ipv4_handle_local_icmp(struct if_state *lan, struct if_state *wan,
+                           struct rte_mbuf *m);
+
+#endif

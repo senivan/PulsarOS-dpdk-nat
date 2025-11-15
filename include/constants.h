@@ -32,4 +32,6 @@
 #define NAT_MAX_DNAT_RULES  32
 #define NAT_TABLE_SIZE      4096
 
+#define SNAT_PORT_MIN 49152
+#define SNAT_PORT_MAX 65535
 #endif

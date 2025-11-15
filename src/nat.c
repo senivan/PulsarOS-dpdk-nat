@@ -9,6 +9,19 @@ static inline int ip_in_net(uint32_t ip_be, uint32_t net_be, uint32_t mask_be)
     return (ip_be & mask_be) == (net_be & mask_be);
 }
 
+static uint16_t snat_next_port = SNAT_PORT_MIN;
+
+static inline uint16_t nat_alloc_snat_port(void)
+{
+    uint16_t p = snat_next_port;
+
+    snat_next_port++;
+    if (snat_next_port > SNAT_PORT_MAX)
+        snat_next_port = SNAT_PORT_MIN;
+
+    return p;
+}
+
 static inline int nat_key_equal(const struct nat_entry_key *a,
                                 const struct nat_entry_key *b)
 {
@@ -160,7 +173,7 @@ int nat_process_lan_outbound(const struct app_config *cfg,
         new_dst   = dst;
         new_dport = dst_port;
         new_src   = cfg->wan.ip_addr;
-        new_sport = src_port;
+        new_sport = nat_alloc_snat_port();
     }
 
     struct nat_entry_key orig = {

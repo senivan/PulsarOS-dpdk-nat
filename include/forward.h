@@ -3,8 +3,8 @@
 #define FORWARD_H
 
 #include <rte_mbuf.h>
-#include "dpdk_port.h"
-#include "fib.h"
+struct if_state;
+struct fi_table;
 
 int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
                      const struct fi_table *fib, struct rte_mbuf *m);

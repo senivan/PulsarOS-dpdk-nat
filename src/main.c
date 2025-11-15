@@ -7,6 +7,8 @@
 #include "config.h"
 #include "arp.h"
 #include "dpdk_port.h"
+#include "fib.h"
+#include "forward.h"
 
 static volatile int keep_running = 1;
 static void on_sigint(int sig){ (void)sig; keep_running = 0; }
@@ -18,23 +20,32 @@ static void wait_link(uint16_t port){
     printf("[port %u] link %s %u Mbps\n", port, link.link_status?"UP":"DOWN", link.link_speed);
 }
 
-static void rx_loop_arp_only(struct if_state *lan, struct if_state *wan){
-    const uint16_t BURST=32;
+static void rx_loop_l3(struct if_state *lan, struct if_state *wan, const struct fi_table *fib)
+{
+    const uint16_t BURST = 32;
     struct rte_mbuf *pkts[BURST];
-    while (keep_running){
+
+    while (keep_running) {
         uint16_t n = rte_eth_rx_burst(lan->port_id, 0, pkts, BURST);
         for (uint16_t i=0;i<n;i++){
-            struct rte_mbuf *m=pkts[i];
+            struct rte_mbuf *m = pkts[i];
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
-            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) arp_handle(lan, m);
-            else rte_pktmbuf_free(m);
+            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
+                (void)arp_handle(lan, m);  
+            } else if (!ipv4_forward_one(lan, wan, fib, m)) {
+                rte_pktmbuf_free(m);
+            }
         }
+
         n = rte_eth_rx_burst(wan->port_id, 0, pkts, BURST);
         for (uint16_t i=0;i<n;i++){
-            struct rte_mbuf *m=pkts[i];
+            struct rte_mbuf *m = pkts[i];
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
-            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) arp_handle(wan, m);
-            else rte_pktmbuf_free(m);
+            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
+                (void)arp_handle(wan, m);
+            } else if (!ipv4_forward_one(lan, wan, fib, m)) {
+                rte_pktmbuf_free(m);
+            }
         }
     }
 }
@@ -53,6 +64,15 @@ int main(int argc, char **argv) {
     lan.ip_be = cfg.lan.ip_addr;
     wan.ip_be = cfg.wan.ip_addr;
     lan.txq = 0; wan.txq = 0;
+    struct fi_table fib = {0};
+    init_fib(&fib);
+    struct in_addr a;
+    struct in_addr b;
+    inet_pton(AF_INET, "192.168.10.0", &a);
+    inet_pton(AF_INET, "255.255.255.0", &b);
+    fib_add(&fib, a.s_addr, b.s_addr, 24, 0, 0);
+    fib_add(&fib, cfg.wan_net, cfg.wan_mask, 24, 1,  0);
+
 
     if (vdev_create(argv[0], &cfg) < 0) return 1;
     if (ports_configure(&lan,&wan, DPDK_RX_DESC, DPDK_TX_DESC, DPDK_MBUF_COUNT, DPDK_MBUF_CACHE) < 0) return 1;
@@ -68,7 +88,7 @@ int main(int argc, char **argv) {
     arp_send_gratuitous(&lan);
     arp_send_gratuitous(&wan);
 
-    rx_loop_arp_only(&lan, &wan);
+    rx_loop_l3(&lan, &wan, &fib);
 
     rte_eth_dev_stop(lan.port_id);
     rte_eth_dev_stop(wan.port_id);

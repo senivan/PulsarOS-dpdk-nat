@@ -66,26 +66,26 @@ static int copy_clean_pcie(const char *src, char *dst, size_t dst_sz, char *errb
 }
 
 static int parse_cidr(const char* cidr, uint32_t *out_ip, uint32_t *out_mask){
-    char buf[CIDR_BUF_LEN];
-    strncpy(buf, cidr, sizeof(buf));
-    buf[sizeof(buf) - 1] = 0;
-
+    if (!cidr || !out_ip || !out_mask) return -1;
+    char buf[64];
+    if (strlen(cidr) >= sizeof(buf)) return -1;
+    strcpy(buf, cidr);
     char *slash = strchr(buf, '/');
-    int pfx = 32;
-    if(slash){
-        *slash = 0;
-        char *end = NULL;
-        long v = strtol(slash+1, &end, 10);
-        if(!end || *end != '\0' || v < 0 || v > 32) return -1;
-        pfx = (int)v;
-    }
+    if (!slash) return -1;
+    *slash = '\0';
+    int prefix = atoi(slash + 1);
+    if (prefix < 0 || prefix > 32) return -1;
 
-    uint32_t ip;
-    if (parse_ip(buf, &ip) != 0) return -1;
+    struct in_addr a;
+    if (inet_pton(AF_INET, buf, &a) != 1) return -1;
 
-    uint32_t host_mask = (pfx == 0) ? 0u : (~0u << (32 - pfx));
-    *out_ip = ip;
-    *out_mask = host_mask;
+    /* compute mask in host order, then convert to network order */
+    uint32_t mask_h = (prefix == 0) ? 0U : (0xFFFFFFFFu << (32 - prefix));
+    uint32_t ip_h   = ntohl(a.s_addr);
+    uint32_t net_h  = ip_h & mask_h;
+
+    *out_ip   = htonl(net_h);
+    *out_mask = htonl(mask_h);
     return 0;
 }
 

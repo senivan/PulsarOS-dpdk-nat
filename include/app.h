@@ -11,18 +11,29 @@ struct timeout_cfg {
     uint32_t icmp;
 };
 
-// struct nat_rule_dnat {
-//     uint16_t ing_port;
-//     uint16_t egr_port;
-//     uint32_t internal_ip;
-// };
+struct dnat_rule {
+    uint32_t ext_ip;
+    uint32_t ext_port;
+    uint32_t int_ip;
+    uint32_t int_port;
+    uint8_t proto; // IPPROTO_TCP, IPPROTO_UDP, IPPROTO_ICMP, 0=all
+};
 
-// struct nat_rule_snat {
-//     uint32_t int_net;
-//     uint32_t int_mask;
-//     char out_if[OUT_IF_NAME_MAX_LEN];
-//     uint32_t ext_ip;
-// };
+struct nat_entry_key {
+    uint32_t src_ip;
+    uint32_t dst_ip;
+    uint32_t src_port;
+    uint32_t dst_port;
+    uint8_t proto;
+    uint8_t direction; // 0 = original direction, 1 = reverse
+};
+
+struct nat_entry {
+    struct nat_entry_key orig;
+    struct nat_entry_key reply;
+    uint8_t hairpin; // 1 if hairpin
+    uint64_t last_seen;
+};
 
 struct nat_config {
     uint8_t hairpin; // enable hairpin bool

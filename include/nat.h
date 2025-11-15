@@ -7,32 +7,10 @@
 #include <rte_udp.h>
 #include <rte_tcp.h>
 #include <rte_icmp.h>
-
+#include "app.h"
 #include "constants.h"
 
-struct dnat_rule {
-    uint32_t ext_ip;
-    uint32_t ext_port;
-    uint32_t int_ip;
-    uint32_t int_port;
-    uint8_t proto; // IPPROTO_TCP, IPPROTO_UDP, IPPROTO_ICMP, 0=all
-};
 
-struct nat_entry_key {
-    uint32_t src_ip;
-    uint32_t dst_ip;
-    uint32_t src_port;
-    uint32_t dst_port;
-    uint8_t proto;
-    uint8_t direction; // 0 = original direction, 1 = reverse
-};
-
-struct nat_entry {
-    struct nat_entry_key orig;
-    struct nat_entry_key reply;
-    uint8_t hairpin; // 1 if hairpin
-    uint64_t last_seen;
-};
 
 struct nat_table {
     struct nat_entry entries[NAT_TABLE_SIZE];
@@ -44,7 +22,7 @@ struct l4_tuple {
     uint16_t dst_port;
     uint16_t icmp_id;
 };
-
+void nat_table_init(struct nat_table *t);
 static inline int parse_l4_tuple(struct rte_ipv4_hdr *ip,
                                  struct l4_tuple *out,
                                  void **l4_hdr_out)
@@ -78,7 +56,6 @@ static inline int parse_l4_tuple(struct rte_ipv4_hdr *ip,
     case IPPROTO_ICMP: {
         struct rte_icmp_hdr *icmp = (struct rte_icmp_hdr *)l4;
         if (ip_len < ihl_bytes + sizeof(*icmp)) return -1;
-        // treat echo id as "port"
         out->icmp_id = icmp->icmp_ident;
         out->src_port = icmp->icmp_ident;
         out->dst_port = icmp->icmp_ident;
@@ -88,5 +65,12 @@ static inline int parse_l4_tuple(struct rte_ipv4_hdr *ip,
         return -1;
     }
 }
-
+int nat_process_wan_inbound(const struct app_config *cfg,
+                            struct nat_table *table,
+                            struct rte_ipv4_hdr *ip,
+                            struct rte_mbuf *m);
+int nat_process_lan_outbound(const struct app_config *cfg,
+                             struct nat_table *table,
+                             struct rte_ipv4_hdr *ip,
+                             struct rte_mbuf *m);
 #endif

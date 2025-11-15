@@ -28,6 +28,7 @@ add_executable(dpdk-router-nat
   src/neigh_t.c
   src/fib.c
   src/forward.c
+  src/nat.c
   src/main.c
 )
 

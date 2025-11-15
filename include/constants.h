@@ -3,8 +3,6 @@
 #define CONSTANTS_H
 #include <stdint.h>
 
-#define NAT_MAX_DNAT_RULES        64
-#define NAT_MAX_SNAT_RULES        64
 
 #define IF_NAME_MAX_LEN           64
 #define OUT_IF_NAME_MAX_LEN       16
@@ -30,5 +28,7 @@
 #define ICMP_ECHO_REQUEST 8
 #define ICMP_ECHO_REPLY   0
 
+#define NAT_MAX_DNAT_RULES  32
+#define NAT_TABLE_SIZE      4096
 
 #endif

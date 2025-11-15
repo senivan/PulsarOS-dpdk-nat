@@ -11,17 +11,23 @@ struct timeout_cfg {
     uint32_t icmp;
 };
 
-struct nat_rule_dnat {
-    uint16_t ing_port;
-    uint16_t egr_port;
-    uint32_t internal_ip;
-};
+// struct nat_rule_dnat {
+//     uint16_t ing_port;
+//     uint16_t egr_port;
+//     uint32_t internal_ip;
+// };
 
-struct nat_rule_snat {
-    uint32_t int_net;
-    uint32_t int_mask;
-    char out_if[OUT_IF_NAME_MAX_LEN];
-    uint32_t ext_ip;
+// struct nat_rule_snat {
+//     uint32_t int_net;
+//     uint32_t int_mask;
+//     char out_if[OUT_IF_NAME_MAX_LEN];
+//     uint32_t ext_ip;
+// };
+
+struct nat_config {
+    uint8_t hairpin; // enable hairpin bool
+    uint32_t dnat_count;
+    struct dnat_rule dnat[NAT_MAX_DNAT_RULES];
 };
 
 struct interface {
@@ -46,17 +52,13 @@ struct app_config {
         PMD_AFPKT,
         PMD_PHYS
     } pmd;
-    // char lan_name[IF_NAME_MAX_LEN];
-    // char wan_name[IF_NAME_MAX_LEN];
     struct interface wan;
     struct interface lan;
     uint32_t lan_net, lan_mask;
     uint32_t wan_net, wan_mask;
     uint32_t public_ip;
-
-    int hairpin;
-    struct nat_rule_snat snat[NAT_MAX_SNAT_RULES]; uint8_t snat_cnt;
-    struct nat_rule_dnat dnat[NAT_MAX_DNAT_RULES]; uint8_t dnat_cnt;
+    
+    struct nat_config nat;
 
     struct arp_config arp;
 

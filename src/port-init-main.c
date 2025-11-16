@@ -15,12 +15,12 @@ static void on_sigint(int){ keep_running = 0; }
 
 int main(int argc, char **argv) {
   if (argc < 3 || strcmp(argv[1], "--") != 0) {
-    fprintf(stderr, "usage: natdpdk -- -c <config.yaml>\n");
+    DBG( "usage: natdpdk -- -c <config.yaml>\n");
     return 2;
   }
   const char *cfgpath = NULL;
   for (int i = 2; i < argc; i++) if (!strcmp(argv[i], "-c") && i+1 < argc) cfgpath = argv[++i];
-  if (!cfgpath) { fprintf(stderr, "config required\n"); return 2; }
+  if (!cfgpath) { DBG( "config required\n"); return 2; }
 
   struct app_config cfg;
   if (cfg_load(cfgpath, &cfg) < 0 || cfg_validate(&cfg) < 0) return 1;

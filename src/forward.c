@@ -11,6 +11,7 @@
 #include "fib.h"     
 #include "neigh_t.h"
 #include "forward.h"
+#include "debug.h"
 
 static inline struct if_state* if_by_port(struct if_state *lan, struct if_state *wan, uint16_t port){
     return (port == lan->port_id) ? lan : ((port == wan->port_id) ? wan : NULL);
@@ -98,42 +99,42 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
                      const struct fi_table *fib, struct rte_mbuf *m)
 {
     struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
-    if (eth->ether_type != rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)){printf("NOT IPV4 packet. Dismissed\n");return 0;};
+    if (eth->ether_type != rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)){DBG("NOT IPV4 packet. Dismissed\n");return 0;};
 
     if (rte_pktmbuf_pkt_len(m) < sizeof(*eth) + sizeof(struct rte_ipv4_hdr)){
         rte_pktmbuf_free(m); 
-        printf("Bad size\n");
+        DBG("Bad size\n");
         return 1;
     }
 
     struct rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth + 1);
-    if ((ip->version_ihl >> 4) != 4) { printf("IPv6 packet\n"); rte_pktmbuf_free(m); return 1; }
+    if ((ip->version_ihl >> 4) != 4) { DBG("IPv6 packet\n"); rte_pktmbuf_free(m); return 1; }
     struct if_state *ingress = if_by_port(lan, wan, m->port);
     if (ingress) {
         neigh_learn(&ingress->table, ip->src_addr, &eth->src_addr);
     }
 
     uint8_t ihl = (ip->version_ihl & 0x0F) * 4;
-    if (rte_pktmbuf_pkt_len(m) < sizeof(*eth) + ihl) { printf("wrong packet length\n"); rte_pktmbuf_free(m); return 1; }
+    if (rte_pktmbuf_pkt_len(m) < sizeof(*eth) + ihl) { DBG("wrong packet length\n"); rte_pktmbuf_free(m); return 1; }
 
     if (ip->time_to_live <= 1){
-        printf("No ttl\n");
+        DBG("No ttl\n");
         rte_pktmbuf_free(m); return 1;
     }
     uint16_t egress_port = 0xffff;
     uint32_t next_hop_be = 0;
     if (!fib_lookup(fib, ip->dst_addr, &egress_port, &next_hop_be)){
-        printf("No route\n");
+        DBG("No route\n");
         rte_pktmbuf_free(m); return 1;
     }
     struct if_state *eg = if_by_port(lan, wan, egress_port);
-    if (!eg){ printf("No port\n"); rte_pktmbuf_free(m); return 1; }
+    if (!eg){ DBG("No port\n"); rte_pktmbuf_free(m); return 1; }
 
 
     if (next_hop_be == 0) next_hop_be = ip->dst_addr;
     struct rte_ether_addr nh_mac;
     if (!neigh_lookup(&eg->table, next_hop_be, &nh_mac)){
-        printf("No such neigh\n");
+        DBG("No such neigh\n");
         rte_pktmbuf_free(m); return 1;
     }
     ip->time_to_live -= 1;
@@ -146,8 +147,8 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
     eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
 
     uint16_t sent = rte_eth_tx_burst(eg->port_id, eg->txq, &m, 1);
-    if (sent == 0) {printf("Failed to send\n"); rte_pktmbuf_free(m);};
-    printf("Sent packet\n");
+    if (sent == 0) {DBG("Failed to send\n"); rte_pktmbuf_free(m);};
+    DBG("Sent packet\n");
     return 1;
 
 }

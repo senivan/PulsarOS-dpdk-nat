@@ -8,6 +8,8 @@
 
 #include "config.h"
 #include "nat.h" 
+#include "debug.h"
+
 
 enum { BDF_CANON_LEN = 12 };
 
@@ -183,13 +185,12 @@ static void debug_print_dnat(const struct app_config *c)
         inet_ntop(AF_INET, &a_ext, ext_buf, sizeof(ext_buf));
         inet_ntop(AF_INET, &a_int, int_buf, sizeof(int_buf));
 
-        fprintf(stderr,"[cfg] DNAT[%u]: ext_ip=%s ext_port=%u "
+        DBG("[cfg] DNAT[%u]: ext_ip=%s ext_port=%u "
                "int_ip=%s int_port=%u proto=%u\n",
                i,
                ext_buf, (unsigned)r->ext_port,
                int_buf, (unsigned)r->int_port,
                (unsigned)r->proto);
-        fprintf(stderr,"\n\n\n\n\n");
     }
 }
 static void load_dnat_seq(yaml_document_t *doc,
@@ -228,7 +229,7 @@ static void load_dnat_seq(yaml_document_t *doc,
 
         uint32_t internal_ip = 0;
         if (parse_ip(ip, &internal_ip) != 0) {
-            fprintf(stderr,
+            DBG(
                     "config: nat.dnat[%u]: invalid ip '%s'\n",
                     conf->nat.dnat_count, ip);
             continue;
@@ -254,7 +255,7 @@ static void load_dnat_seq(yaml_document_t *doc,
                 {
                     proto = (uint8_t)v;
                 } else {
-                    fprintf(stderr,
+                    DBG(
                             "config: nat.dnat[%u]: unknown protocol '%s', using 'any'\n",
                             conf->nat.dnat_count, s_protocol);
                     proto = 0;
@@ -300,7 +301,7 @@ int cfg_load(const char *path, struct app_config *c)
     }
 
     if (!yaml_parser_initialize(&parser)) {
-        fprintf(stderr, "config: failed to init yaml parser\n");
+        DBG( "config: failed to init yaml parser\n");
         goto fail;
     }
     parser_inited = 1;
@@ -308,14 +309,14 @@ int cfg_load(const char *path, struct app_config *c)
     yaml_parser_set_input_file(&parser, f);
 
     if (!yaml_parser_load(&parser, &doc)) {
-        fprintf(stderr, "config: yaml_parser_load failed\n");
+        DBG( "config: yaml_parser_load failed\n");
         goto fail;
     }
     doc_loaded = 1;
 
     yaml_node_t *root = yaml_document_get_root_node(&doc);
     if (!root || root->type != YAML_MAPPING_NODE) {
-        fprintf(stderr, "config: root node is not a mapping\n");
+        DBG( "config: root node is not a mapping\n");
         goto fail;
     }
 
@@ -352,7 +353,7 @@ int cfg_load(const char *path, struct app_config *c)
                                      sizeof(c->lan.pcie_addr),
                                      err, sizeof(err)) != 0)
     {
-        fprintf(stderr,
+        DBG(
                 "config: lan pcie_addr invalid: %s\n",
                 lan_addr ? err : "missing");
         goto fail;
@@ -363,18 +364,18 @@ int cfg_load(const char *path, struct app_config *c)
                                      sizeof(c->wan.pcie_addr),
                                      err, sizeof(err)) != 0)
     {
-        fprintf(stderr,
+        DBG(
                 "config: wan pcie_addr invalid: %s\n",
                 wan_addr ? err : "missing");
         goto fail;
     }
 
     if (lan_ip && parse_ip(lan_ip, &c->lan.ip_addr) != 0) {
-        fprintf(stderr, "config: interfaces.lan.ip invalid: '%s'\n", lan_ip);
+        DBG( "config: interfaces.lan.ip invalid: '%s'\n", lan_ip);
         goto fail;
     }
     if (wan_ip && parse_ip(wan_ip, &c->wan.ip_addr) != 0) {
-        fprintf(stderr, "config: interfaces.wan.ip invalid: '%s'\n", wan_ip);
+        DBG( "config: interfaces.wan.ip invalid: '%s'\n", wan_ip);
         goto fail;
     }
 
@@ -383,11 +384,11 @@ int cfg_load(const char *path, struct app_config *c)
     const char *wan_cidr = scalar(map_get(&doc, ips, "wan"));
 
     if (lan_cidr && parse_cidr(lan_cidr, &c->lan_net, &c->lan_mask) != 0) {
-        fprintf(stderr, "config: ips.lan invalid: '%s'\n", lan_cidr);
+        DBG( "config: ips.lan invalid: '%s'\n", lan_cidr);
         goto fail;
     }
     if (wan_cidr && parse_cidr(wan_cidr, &c->wan_net, &c->wan_mask) != 0) {
-        fprintf(stderr, "config: ips.wan invalid: '%s'\n", wan_cidr);
+        DBG( "config: ips.wan invalid: '%s'\n", wan_cidr);
         goto fail;
     }
     c->public_ip = c->wan.ip_addr;
@@ -488,15 +489,15 @@ int cfg_validate(const struct app_config *c)
     int ok = 1;
 
     if (!c->lan.name[0] || !c->wan.name[0]) {
-        fprintf(stderr, "config: interfaces.lan/wan required\n");
+        DBG( "config: interfaces.lan/wan required\n");
         ok = 0;
     }
     if (!c->lan_net || !c->wan_net) {
-        fprintf(stderr, "config: ips.lan/ips.wan required\n");
+        DBG( "config: ips.lan/ips.wan required\n");
         ok = 0;
     }
     if (!c->public_ip) {
-        fprintf(stderr,
+        DBG(
                 "config: public_ip not set (need ips.public or interfaces.wan.ip)\n");
         ok = 0;
     }
@@ -504,7 +505,7 @@ int cfg_validate(const struct app_config *c)
     for (uint32_t i = 0; i < c->nat.dnat_count; i++) {
         const struct dnat_rule *r = &c->nat.dnat[i];
         if (!r->ext_ip || !r->ext_port || !r->int_ip || !r->int_port) {
-            fprintf(stderr, "config: nat.dnat[%u] invalid\n", i);
+            DBG( "config: nat.dnat[%u] invalid\n", i);
             ok = 0;
         }
     }

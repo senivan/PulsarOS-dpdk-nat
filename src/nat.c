@@ -3,6 +3,8 @@
 
 
 #include "nat.h"
+#include "debug.h"
+
 
 static inline int ip_in_net(uint32_t ip_be, uint32_t net_be, uint32_t mask_be)
 {
@@ -68,7 +70,7 @@ struct nat_entry *nat_insert(struct nat_table *t,
     e->reply = *reply;
     e->hairpin = hairpin ? 1 : 0;
     e->last_seen = time(NULL);
-    fprintf(stderr, "[snat] Connection recoreder");
+    DBG( "[snat] Connection recoreder");
     return e;
 }
 

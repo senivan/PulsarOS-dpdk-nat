@@ -10,6 +10,14 @@
 #include "fib.h"
 #include "forward.h"
 #include "nat.h"
+#include "debug.h"
+
+#if DEBUG_OUTPUT
+#  pragma message("DEBUG_OUTPUT = 1")
+#else
+#  pragma message("DEBUG_OUTPUT = 0")
+#endif
+
 
 static volatile int keep_running = 1;
 static void on_sigint(int sig){ (void)sig; keep_running = 0; }
@@ -18,7 +26,7 @@ static void wait_link(uint16_t port){
     struct rte_eth_link link;
     for (int i=0;i<20;i++){ rte_eth_link_get_nowait(port,&link); if (link.link_status) break; rte_delay_us_sleep(50*1000); }
     rte_eth_link_get_nowait(port,&link);
-    printf("[port %u] link %s %u Mbps\n", port, link.link_status?"UP":"DOWN", link.link_speed);
+    DBG("[port %u] link %s %u Mbps\n", port, link.link_status?"UP":"DOWN", link.link_speed);
 }
 
 static void rx_loop_main(
@@ -89,10 +97,10 @@ static void rx_loop_main(
 }
 
 int main(int argc, char **argv) {
-    if (argc < 3 || strcmp(argv[1], "--") != 0) { fprintf(stderr, "usage: natdpdk -- -c <config.yaml>\n"); return 2; }
+    if (argc < 3 || strcmp(argv[1], "--") != 0) { DBG( "usage: natdpdk -- -c <config.yaml>\n"); return 2; }
     const char *cfgpath = NULL;
     for (int i = 2; i < argc; i++) if (!strcmp(argv[i], "-c") && i+1 < argc) cfgpath = argv[++i];
-    if (!cfgpath) { fprintf(stderr, "config required\n"); return 2; }
+    if (!cfgpath) { DBG( "config required\n"); return 2; }
 
     struct app_config cfg;
     struct nat_table nat;

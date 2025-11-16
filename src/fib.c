@@ -1,6 +1,7 @@
 #include "fib.h"
 #include <arpa/inet.h>
 #include <stdio.h>
+#include "debug.h"
 
 static inline int mask_match(uint32_t ip, uint32_t net, uint32_t mask){
     return (ip & mask) == (net & mask);
@@ -24,13 +25,13 @@ int fib_lookup(const struct fi_table *f, uint32_t dst,
 {
     struct in_addr a;
     a.s_addr = dst;
-    printf("[fib] lookup dst=%s (0x%08x), routes=%u\n", inet_ntoa(a), ntohl(dst), (unsigned)f->count);
+    DBG("[fib] lookup dst=%s (0x%08x), routes=%u\n", inet_ntoa(a), ntohl(dst), (unsigned)f->count);
 
     for (uint8_t i = 0; i < f->count; ++i) {
         struct in_addr rnet, rmask;
         rnet.s_addr = f->routes[i].dst;
         rmask.s_addr = f->routes[i].mask;
-        printf("[fib]   route %u: net=%s mask=%s prefix=%u egress=%u next_hop=0x%08x\n",
+        DBG("[fib]   route %u: net=%s mask=%s prefix=%u egress=%u next_hop=0x%08x\n",
                i, inet_ntoa(rnet), inet_ntoa(rmask), f->routes[i].prefix_length,
                f->routes[i].egress_port, ntohl(f->routes[i].next_hop));
     }
@@ -42,7 +43,7 @@ int fib_lookup(const struct fi_table *f, uint32_t dst,
         if (!mask_match(dst, route->dst, route->mask)) {
             struct in_addr rnet; rnet.s_addr = route->dst;
             struct in_addr rmask; rmask.s_addr = route->mask;
-            printf("[fib]   no match: dst=%s net=%s mask=%s\n",
+            DBG("[fib]   no match: dst=%s net=%s mask=%s\n",
                    inet_ntoa(a), inet_ntoa(rnet), inet_ntoa(rmask));
             continue;
         }
@@ -52,14 +53,14 @@ int fib_lookup(const struct fi_table *f, uint32_t dst,
         }
     }    
     if (best < 0) {
-        printf("[fib] => no route matched\n");
+        DBG("[fib] => no route matched\n");
         return 0;
     }
     const struct route *rt = &f->routes[best];
     *egress = rt->egress_port;
     *hop = (rt->next_hop != 0) ? rt->next_hop : dst;
     struct in_addr hopaddr; hopaddr.s_addr = *hop;
-    printf("[fib] => matched route %d (prefix=%u) egress=%u hop=%s\n", best, rt->prefix_length, *egress, inet_ntoa(hopaddr));
+    DBG("[fib] => matched route %d (prefix=%u) egress=%u hop=%s\n", best, rt->prefix_length, *egress, inet_ntoa(hopaddr));
     return 1;
         
 }

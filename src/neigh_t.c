@@ -1,5 +1,7 @@
 #include "neigh_t.h"
 #include <arpa/inet.h>
+#include "debug.h"
+
 static inline uint32_t hash(uint32_t x){
     x ^= x >> 16;
     x *= 0x7feb352dU;
@@ -21,7 +23,7 @@ void neigh_learn(struct neigh_table *t, uint32_t ip_be, const struct rte_ether_a
             e->in_use = 1;
             e->ip_be = k;
             e->mac = *mac;
-            printf("[neigh] add %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
+            DBG("[neigh] add %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
                 inet_ntop(AF_INET, &k, buf, INET_ADDRSTRLEN),
                 e->mac.addr_bytes[0],e->mac.addr_bytes[1],e->mac.addr_bytes[2],
                 e->mac.addr_bytes[3],e->mac.addr_bytes[4],e->mac.addr_bytes[5]);
@@ -30,7 +32,7 @@ void neigh_learn(struct neigh_table *t, uint32_t ip_be, const struct rte_ether_a
         if (e->ip_be == k){
             if (memcmp(e->mac.addr_bytes, mac->addr_bytes, RTE_ETHER_ADDR_LEN) != 0){
                 e->mac = *mac;
-                printf("[neigh] update %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
+                DBG("[neigh] update %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
                     inet_ntop(AF_INET, &k, buf, INET_ADDRSTRLEN),
                     e->mac.addr_bytes[0],e->mac.addr_bytes[1],e->mac.addr_bytes[2],
                     e->mac.addr_bytes[3],e->mac.addr_bytes[4],e->mac.addr_bytes[5]);
@@ -38,7 +40,7 @@ void neigh_learn(struct neigh_table *t, uint32_t ip_be, const struct rte_ether_a
             return;
         }
     }
-    printf("[neigh] table full, drop learn for %s\n",
+    DBG("[neigh] table full, drop learn for %s\n",
         inet_ntop(AF_INET, &k, buf, INET_ADDRSTRLEN));
 }
 
@@ -60,12 +62,12 @@ int neigh_lookup(const struct neigh_table *t, uint32_t ip_be, struct rte_ether_a
 
 void neigh_dump(const struct neigh_table *t, const char *tag){
     char buf[64];
-    printf("[neigh:%s] -- dump ----\n", tag ? tag : "");
+    DBG("[neigh:%s] -- dump ----\n", tag ? tag : "");
     for (int i=0;i<NEIGH_SIZE;i++){
         const struct neigh_entry *e = &t->slots[i];
         if (!e->in_use) continue;
         char s[INET_ADDRSTRLEN];
-        printf("  %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
+        DBG("  %s -> %02x:%02x:%02x:%02x:%02x:%02x\n",
                inet_ntop(AF_INET, &e->ip_be, buf, INET_ADDRSTRLEN),
                e->mac.addr_bytes[0], e->mac.addr_bytes[1], e->mac.addr_bytes[2],
                e->mac.addr_bytes[3], e->mac.addr_bytes[4], e->mac.addr_bytes[5]);

@@ -108,8 +108,10 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
 
     struct rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth + 1);
     if ((ip->version_ihl >> 4) != 4) { printf("IPv6 packet\n"); rte_pktmbuf_free(m); return 1; }
-    neigh_learn(&lan->table, ip->src_addr, &eth->src_addr);
-
+    struct if_state *ingress = if_by_port(lan, wan, m->port);
+    if (ingress) {
+        neigh_learn(&ingress->table, ip->src_addr, &eth->src_addr);
+    }
 
     uint8_t ihl = (ip->version_ihl & 0x0F) * 4;
     if (rte_pktmbuf_pkt_len(m) < sizeof(*eth) + ihl) { printf("wrong packet length\n"); rte_pktmbuf_free(m); return 1; }

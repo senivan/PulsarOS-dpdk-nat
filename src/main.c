@@ -39,7 +39,6 @@ static void rx_loop_main(
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
             if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
                 (void)arp_handle(lan, m);  
-                rte_pktmbuf_free(m);
                 continue;
             } 
             if (ipv4_handle_local_icmp(lan, wan, m)){
@@ -61,7 +60,6 @@ static void rx_loop_main(
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
             if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
                 (void)arp_handle(wan, m);
-                rte_pktmbuf_free(m);
                 continue;
             } 
             if (ipv4_handle_local_icmp(lan, wan, m)){

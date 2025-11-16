@@ -1,7 +1,7 @@
 # PulsarOS-dpdk-nat
 Configurable IPv4 NAT written with DPDK.
 ## Features
-- NAT44 SNAT/DNAT + hairpin route
-- checksum offloading
-- Prometheus metrics at `/metrics`
-- connection tracking + grim reaper
+[x] NAT44 SNAT/DNAT + hairpin route
+[x] checksum offloading
+[o] Prometheus metrics at `/metrics`
+[x] connection tracking + grim reaper

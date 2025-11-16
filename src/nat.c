@@ -68,6 +68,7 @@ struct nat_entry *nat_insert(struct nat_table *t,
     e->reply = *reply;
     e->hairpin = hairpin ? 1 : 0;
     e->last_seen = time(NULL);
+    fprintf(stderr, "[snat] Connection recoreder");
     return e;
 }
 
@@ -120,11 +121,10 @@ int nat_process_lan_outbound(const struct app_config *cfg,
 
     struct nat_entry *e = nat_lookup(table, &key);
     if (e) {
-        uint32_t new_src   = e->reply.src_ip;
-        uint32_t new_dst   = e->reply.dst_ip;  
-        uint16_t new_sport = e->reply.src_port;
-        uint16_t new_dport = e->reply.dst_port;
-
+        uint32_t new_src   = e->reply.dst_ip;   
+        uint32_t new_dst   = e->reply.src_ip;   
+        uint16_t new_sport = e->reply.dst_port;
+        uint16_t new_dport = e->reply.src_port;
         ip->src_addr = new_src;
         ip->dst_addr = new_dst;
 
@@ -159,8 +159,12 @@ int nat_process_lan_outbound(const struct app_config *cfg,
     int hairpin = 0;
     uint32_t new_src, new_dst;
     uint16_t new_sport, new_dport;
-
-    if (dr && ip_in_net(dr->int_ip, cfg->lan_net, cfg->lan_mask) &&
+    if (proto == IPPROTO_ICMP) {
+        new_src   = cfg->wan.ip_addr;  
+        new_dst   = dst;               
+        new_sport = src_port;         
+        new_dport = dst_port;          
+    }else if (dr && ip_in_net(dr->int_ip, cfg->lan_net, cfg->lan_mask) &&
         cfg->nat.hairpin)
     {
         hairpin  = 1;
@@ -235,78 +239,88 @@ int nat_process_wan_inbound(const struct app_config *cfg,
     int proto = parse_l4_tuple(ip, &l4, &l4_hdr);
     if (proto < 0) return 0;
 
-    uint32_t src = ip->src_addr;  
-    uint32_t dst = ip->dst_addr; 
+    uint32_t src = ip->src_addr;
+    uint32_t dst = ip->dst_addr;
+    uint16_t src_port = ntohs(l4.src_port);
+    uint16_t dst_port = ntohs(l4.dst_port);
 
-    uint16_t src_port_be = l4.src_port;
-    uint16_t dst_port_be = l4.dst_port;
-    uint16_t src_port    = ntohs(src_port_be);  
-    uint16_t dst_port    = ntohs(dst_port_be);  
+    struct nat_entry_key k = {
+        .src_ip   = src,
+        .dst_ip   = dst,
+        .src_port = src_port,
+        .dst_port = dst_port,
+        .proto    = proto,
+        .direction = 1   
+    };
+    struct nat_entry *e = nat_lookup(table, &k);
+    if (e) {
+        ip->dst_addr = e->orig.src_ip;
 
-    struct in_addr a;
-    char buf[16];
-    a.s_addr = dst;
-    inet_ntop(AF_INET, &a, buf, sizeof(buf));
-    printf("[nat] WAN inbound: dst=%s port=%u proto=%d\n",
-           buf, (unsigned)dst_port, proto);
+        if (proto == IPPROTO_TCP) {
+            struct rte_tcp_hdr *tcp = (struct rte_tcp_hdr *)l4_hdr;
+            tcp->dst_port = htons(e->orig.src_port);
+            tcp->cksum = 0;
+            tcp->cksum = rte_ipv4_udptcp_cksum(ip, tcp);
+        } else if (proto == IPPROTO_UDP) {
+            struct rte_udp_hdr *udp = (struct rte_udp_hdr *)l4_hdr;
+            udp->dst_port = htons(e->orig.src_port);
+            udp->dgram_cksum = 0;
+            udp->dgram_cksum = rte_ipv4_udptcp_cksum(ip, udp);
+        } else if (proto == IPPROTO_ICMP) {
+        }
+
+        ip->hdr_checksum = 0;
+        ip->hdr_checksum = rte_ipv4_cksum(ip);
+        m->ol_flags = 0;
+        return 1;
+    }
 
     const struct dnat_rule *dr =
-        nat_find_dnat_rule(&cfg->nat, dst, dst_port_be, proto);
+        nat_find_dnat_rule(&cfg->nat, dst, l4.dst_port, proto);
 
     if (!dr) {
-        printf("[nat] no DNAT rule match\n");
         return 0;
     }
 
-    uint32_t int_ip   = dr->int_ip;              
-    uint16_t int_port = dr->int_port ? dr->int_port
-                                     : dst_port;     
-    uint32_t client_ip   = src;                      
+    uint32_t int_ip   = dr->int_ip;
+    uint16_t int_port = dr->int_port ? dr->int_port : dst_port;
+    uint32_t client_ip   = src;
     uint16_t client_port = src_port;
-    uint32_t vip_ip      = cfg->wan.ip_addr;          
-    uint16_t vip_port    = (uint16_t)dr->ext_port;   
-
-    a.s_addr = int_ip;
-    inet_ntop(AF_INET, &a, buf, sizeof(buf));
-    printf("[nat] DNAT match: %u -> int %s:%u\n",
-           (unsigned)vip_port, buf, (unsigned)int_port);
+    uint32_t vip_ip      = cfg->wan.ip_addr;
+    uint16_t vip_port    = (uint16_t)dr->ext_port;
 
     struct nat_entry_key orig = {
-        .src_ip   = int_ip,         
-        .dst_ip   = client_ip,     
+        .src_ip   = int_ip,
+        .dst_ip   = client_ip,
         .src_port = int_port,
         .dst_port = client_port,
         .proto    = proto,
         .direction = 0
     };
     struct nat_entry_key reply = {
-        .src_ip   = vip_ip,        
-        .dst_ip   = client_ip,     
-        .src_port = vip_port,     
+        .src_ip   = vip_ip,
+        .dst_ip   = client_ip,
+        .src_port = vip_port,
         .dst_port = client_port,
         .proto    = proto,
         .direction = 1
     };
-
     nat_insert(table, &orig, &reply, 0);
 
     ip->dst_addr = int_ip;
-
     if (proto == IPPROTO_TCP) {
         struct rte_tcp_hdr *tcp = (struct rte_tcp_hdr *)l4_hdr;
         tcp->dst_port = htons(int_port);
-        tcp->cksum    = 0;
-        tcp->cksum    = rte_ipv4_udptcp_cksum(ip, tcp);
+        tcp->cksum = 0;
+        tcp->cksum = rte_ipv4_udptcp_cksum(ip, tcp);
     } else if (proto == IPPROTO_UDP) {
         struct rte_udp_hdr *udp = (struct rte_udp_hdr *)l4_hdr;
-        udp->dst_port    = htons(int_port);
+        udp->dst_port = htons(int_port);
         udp->dgram_cksum = 0;
         udp->dgram_cksum = rte_ipv4_udptcp_cksum(ip, udp);
     }
-
-    m->ol_flags      = 0;
     ip->hdr_checksum = 0;
     ip->hdr_checksum = rte_ipv4_cksum(ip);
-
+    m->ol_flags = 0;
     return 1;
 }

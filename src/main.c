@@ -34,42 +34,56 @@ static void rx_loop_main(
 
     while (keep_running) {
         uint16_t n = rte_eth_rx_burst(lan->port_id, 0, pkts, BURST);
-        for (uint16_t i=0;i<n;i++){
+        for (uint16_t i=0; i<n; i++) {
             struct rte_mbuf *m = pkts[i];
-            struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
-            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
-                (void)arp_handle(lan, m);  
+            const struct rte_ether_hdr *eth; uint16_t et, l3off;
+            if (l2_skip_vlan(m, &eth, &et, &l3off) < 0) { rte_pktmbuf_free(m); continue; }
+
+            if (et == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
+                (void)arp_handle(lan, m);   
                 continue;
-            } 
-            if (ipv4_handle_local_icmp(lan, wan, m)){
+            }
+            if (et != rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)) { rte_pktmbuf_free(m); continue; }
+
+            struct rte_ipv4_hdr *ip = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr*, l3off);
+            m->l2_len = l3off; m->l3_len = sizeof(*ip);  
+
+            if (ip_is_local(ip->dst_addr, lan, wan)) {
+                if (ipv4_handle_local_icmp(lan, wan, m)) continue;
+                rte_pktmbuf_free(m);
                 continue;
-            }  
-            
-            struct  rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth+1);
+            }
 
             nat_process_lan_outbound(cfg, nat, ip, m);
 
-            if (!ipv4_forward_one(lan, wan, fib, m)) {
-                rte_pktmbuf_free(m);
-            }
+            if (!ipv4_forward_one(lan, wan, fib, m)) rte_pktmbuf_free(m);
         }
 
+
         n = rte_eth_rx_burst(wan->port_id, 0, pkts, BURST);
-        for (uint16_t i=0;i<n;i++){
+        for (uint16_t i=0; i<n; i++) {
             struct rte_mbuf *m = pkts[i];
-            struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
-            if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
-                (void)arp_handle(wan, m);
+            const struct rte_ether_hdr *eth; uint16_t et, l3off;
+            if (l2_skip_vlan(m, &eth, &et, &l3off) < 0) { rte_pktmbuf_free(m); continue; }
+
+            if (et == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
+                (void)arp_handle(wan, m);  
                 continue;
-            } 
-            if (ipv4_handle_local_icmp(lan, wan, m)){
-                continue;
-            } 
-            struct  rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth+1);
-            nat_process_wan_inbound(cfg, nat, ip, m);
-            if (!ipv4_forward_one(lan, wan, fib, m)) {
-                rte_pktmbuf_free(m);
             }
+            if (et != rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4)) { rte_pktmbuf_free(m); continue; }
+
+            struct rte_ipv4_hdr *ip = rte_pktmbuf_mtod_offset(m, struct rte_ipv4_hdr*, l3off);
+            m->l2_len = l3off; m->l3_len = sizeof(*ip);
+
+            nat_process_wan_inbound(cfg, nat, ip, m);
+
+            if (ip->dst_addr == wan->ip_be) {
+                if (ipv4_handle_local_icmp(lan, wan, m)) continue;
+                rte_pktmbuf_free(m);
+                continue;
+            }
+
+            if (!ipv4_forward_one(lan, wan, fib, m)) rte_pktmbuf_free(m);
         }
     }
 }

@@ -16,8 +16,11 @@ static inline struct if_state* if_by_port(struct if_state *lan, struct if_state 
     return (port == lan->port_id) ? lan : ((port == wan->port_id) ? wan : NULL);
 }
 
-#define ICMP_ECHO_REQUEST 8
-#define ICMP_ECHO_REPLY   0
+static inline int ip_in_net(uint32_t ip_be, uint32_t net_be, uint32_t mask_be)
+{
+    return (ip_be & mask_be) == (net_be & mask_be);
+}
+
 
 int ipv4_handle_local_icmp(struct if_state *lan, struct if_state *wan,
                            struct rte_mbuf *m)
@@ -110,10 +113,6 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
 
     uint8_t ihl = (ip->version_ihl & 0x0F) * 4;
     if (rte_pktmbuf_pkt_len(m) < sizeof(*eth) + ihl) { printf("wrong packet length\n"); rte_pktmbuf_free(m); return 1; }
-    // if (ip->dst_addr == lan->ip_be || ip->dst_addr == wan->ip_be){
-    //     printf("Local forwarding not working yet\n");
-    //     rte_pktmbuf_free(m); return 1;
-    // }
 
     if (ip->time_to_live <= 1){
         printf("No ttl\n");
@@ -137,7 +136,7 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
     }
     ip->time_to_live -= 1;
     ip->hdr_checksum = 0;
-    ip->src_addr = wan->ip_be;
+    // ip->src_addr = wan->ip_be;
     ip->hdr_checksum = rte_ipv4_cksum(ip);
 
     rte_ether_addr_copy(&nh_mac,  &eth->dst_addr);

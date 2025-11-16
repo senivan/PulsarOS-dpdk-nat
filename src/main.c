@@ -9,6 +9,7 @@
 #include "dpdk_port.h"
 #include "fib.h"
 #include "forward.h"
+#include "nat.h"
 
 static volatile int keep_running = 1;
 static void on_sigint(int sig){ (void)sig; keep_running = 0; }
@@ -20,7 +21,13 @@ static void wait_link(uint16_t port){
     printf("[port %u] link %s %u Mbps\n", port, link.link_status?"UP":"DOWN", link.link_speed);
 }
 
-static void rx_loop_l3(struct if_state *lan, struct if_state *wan, const struct fi_table *fib)
+static void rx_loop_main(
+    struct app_config *cfg,
+    struct if_state *lan, 
+    struct if_state *wan, 
+    const struct fi_table *fib,
+    struct nat_table *nat
+)
 {
     const uint16_t BURST = 32;
     struct rte_mbuf *pkts[BURST];
@@ -32,9 +39,18 @@ static void rx_loop_l3(struct if_state *lan, struct if_state *wan, const struct 
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
             if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
                 (void)arp_handle(lan, m);  
-            } else if (ipv4_handle_local_icmp(lan, wan, m)){
+                rte_pktmbuf_free(m);
                 continue;
-            } else if (!ipv4_forward_one(lan, wan, fib, m)) {
+            } 
+            if (ipv4_handle_local_icmp(lan, wan, m)){
+                continue;
+            }  
+            
+            struct  rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth+1);
+
+            nat_process_lan_outbound(cfg, nat, ip, m);
+
+            if (!ipv4_forward_one(lan, wan, fib, m)) {
                 rte_pktmbuf_free(m);
             }
         }
@@ -45,9 +61,15 @@ static void rx_loop_l3(struct if_state *lan, struct if_state *wan, const struct 
             struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr*);
             if (eth->ether_type == rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP)) {
                 (void)arp_handle(wan, m);
-            } else if (ipv4_handle_local_icmp(lan, wan, m)){
+                rte_pktmbuf_free(m);
                 continue;
-            } else if (!ipv4_forward_one(lan, wan, fib, m)) {
+            } 
+            if (ipv4_handle_local_icmp(lan, wan, m)){
+                continue;
+            } 
+            struct  rte_ipv4_hdr *ip = (struct rte_ipv4_hdr *)(eth+1);
+            nat_process_wan_inbound(cfg, nat, ip, m);
+            if (!ipv4_forward_one(lan, wan, fib, m)) {
                 rte_pktmbuf_free(m);
             }
         }
@@ -61,6 +83,8 @@ int main(int argc, char **argv) {
     if (!cfgpath) { fprintf(stderr, "config required\n"); return 2; }
 
     struct app_config cfg;
+    struct nat_table nat;
+    nat_table_init(&nat);
     if (cfg_load(cfgpath, &cfg) < 0 || cfg_validate(&cfg) < 0) return 1;
     struct if_state lan = {0}, wan = {0};
     neigh_init(&lan.table);
@@ -78,6 +102,9 @@ int main(int argc, char **argv) {
     fib_add(&fib, cfg.wan_net, cfg.wan_mask, 24, 1,  0);
 
 
+
+
+
     if (vdev_create(argv[0], &cfg) < 0) return 1;
     if (ports_configure(&lan,&wan, DPDK_RX_DESC, DPDK_TX_DESC, DPDK_MBUF_COUNT, DPDK_MBUF_CACHE) < 0) return 1;
 
@@ -92,7 +119,7 @@ int main(int argc, char **argv) {
     arp_send_gratuitous(&lan);
     arp_send_gratuitous(&wan);
 
-    rx_loop_l3(&lan, &wan, &fib);
+    rx_loop_main(&cfg, &lan, &wan, &fib, &nat);
 
     rte_eth_dev_stop(lan.port_id);
     rte_eth_dev_stop(wan.port_id);

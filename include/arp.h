@@ -46,4 +46,8 @@ void arp_send_gratuitous(struct if_state *ifs);
 static inline int is_arp_request_for_us(struct rte_mbuf *m, uint32_t our_ip_be);
 int arp_handle(struct if_state *ifs, struct rte_mbuf *m);
 
+int arp_resolve(struct if_state *ifs,
+                uint32_t dst_ip_be,
+                struct rte_ether_addr *mac_out);
+
 #endif 

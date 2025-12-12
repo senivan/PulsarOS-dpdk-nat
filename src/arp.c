@@ -7,6 +7,7 @@
 
 #include "arp.h"
 #include "neigh_t.h"
+#include "debug.h"
 
 
 static inline int ip_is_multicast(uint32_t be) {
@@ -88,6 +89,62 @@ static inline void send_arp_reply(struct if_state *ifs,
     if (!rte_eth_tx_burst(ifs->port_id, ifs->txq, &txm, 1)) rte_pktmbuf_free(m);
 }
 
+static void arp_send_request(struct if_state *ifs, uint32_t target_ip_be)
+{
+    struct rte_mbuf *m = rte_pktmbuf_alloc(ifs->mbuf_pool);
+    if (!m)
+        return;
+
+    const uint16_t plen =
+        sizeof(struct rte_ether_hdr) + sizeof(struct rte_arp_hdr);
+
+    if (!rte_pktmbuf_append(m, plen)) {
+        rte_pktmbuf_free(m);
+        return;
+    }
+
+    struct rte_ether_hdr *eth = rte_pktmbuf_mtod(m, struct rte_ether_hdr *);
+    struct rte_arp_hdr   *arp = (struct rte_arp_hdr *)(eth + 1);
+
+    struct rte_ether_addr bcast;
+    memset(bcast.addr_bytes, 0xFF, RTE_ETHER_ADDR_LEN);
+
+    rte_ether_addr_copy(&bcast,    &eth->dst_addr);
+    rte_ether_addr_copy(&ifs->mac, &eth->src_addr);
+    eth->ether_type = rte_cpu_to_be_16(RTE_ETHER_TYPE_ARP);
+
+    arp->arp_hardware = rte_cpu_to_be_16(RTE_ARP_HRD_ETHER);
+    arp->arp_protocol = rte_cpu_to_be_16(RTE_ETHER_TYPE_IPV4);
+    arp->arp_hlen     = RTE_ETHER_ADDR_LEN;
+    arp->arp_plen     = 4;
+    arp->arp_opcode   = rte_cpu_to_be_16(RTE_ARP_OP_REQUEST);
+
+    rte_ether_addr_copy(&ifs->mac, &arp->arp_data.arp_sha);
+    memset(&arp->arp_data.arp_tha, 0, sizeof(arp->arp_data.arp_tha));
+
+    arp->arp_data.arp_sip = ifs->ip_be;
+    arp->arp_data.arp_tip = target_ip_be;
+
+    m->l2_len   = sizeof(struct rte_ether_hdr);
+    m->data_len = plen;
+    m->pkt_len  = plen;
+
+    if (!rte_eth_tx_burst(ifs->port_id, ifs->txq, &m, 1))
+        rte_pktmbuf_free(m);
+}
+
+int arp_resolve(struct if_state *ifs,
+                uint32_t dst_ip_be,
+                struct rte_ether_addr *mac_out)
+{
+    if (neigh_lookup(&ifs->table, dst_ip_be, mac_out)) {
+        return 0;   
+    }
+
+    arp_send_request(ifs, dst_ip_be);
+    return -1;
+}
+
 
 int arp_handle(struct if_state *ifs, struct rte_mbuf *m)
 {
@@ -98,7 +155,7 @@ int arp_handle(struct if_state *ifs, struct rte_mbuf *m)
         if (arp->arp_data.arp_sip != 0 &&
             (arp->arp_data.arp_sha.addr_bytes[0] & 1) == 0)
             neigh_learn(&ifs->table, arp->arp_data.arp_sip, &arp->arp_data.arp_sha);
-
+            DBG("ARP reply learned\n");
         rte_pktmbuf_free(m);
         return 1;
     }

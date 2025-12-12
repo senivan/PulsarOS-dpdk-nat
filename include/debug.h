@@ -1,7 +1,7 @@
 #pragma once
 #include <stdio.h>
 
-#ifdef DEBUG_OUTPUT
+#if DEBUG_OUTPUT
   #define DBG(...)                                                         \
     do {                                                                   \
       fprintf(stderr, "[%s:%d] ", __func__, __LINE__);                     \

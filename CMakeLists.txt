@@ -62,6 +62,7 @@ add_executable(dpdk-router-nat
 #   ${DPDK_CFLAGS_OTHER}
 # )
 
+target_compile_definitions(dpdk-router-nat PRIVATE DEBUG_OUTPUT=0)
 
 
 target_include_directories(dpdk-router-nat PRIVATE

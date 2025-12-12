@@ -6,8 +6,8 @@
 #include "constants.h"
 
 struct route {
-    uint32_t dst; // network address
-    uint32_t mask; // network mask
+    uint32_t dst; 
+    uint32_t mask; 
 
     uint8_t prefix_length;
 

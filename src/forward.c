@@ -12,6 +12,7 @@
 #include "neigh_t.h"
 #include "forward.h"
 #include "debug.h"
+#include "arp.h"
 
 static inline struct if_state* if_by_port(struct if_state *lan, struct if_state *wan, uint16_t port){
     return (port == lan->port_id) ? lan : ((port == wan->port_id) ? wan : NULL);
@@ -91,7 +92,7 @@ int ipv4_handle_local_icmp(struct if_state *lan, struct if_state *wan,
         rte_pktmbuf_free(m);
     }
 
-    return 1;   /* handled */
+    return 1;   
 }
 
 
@@ -131,15 +132,17 @@ int ipv4_forward_one(struct if_state *lan, struct if_state *wan,
     if (!eg){ DBG("No port\n"); rte_pktmbuf_free(m); return 1; }
 
 
-    if (next_hop_be == 0) next_hop_be = ip->dst_addr;
+    if (next_hop_be == 0){
+        next_hop_be = ip->dst_addr;
+    }
     struct rte_ether_addr nh_mac;
-    if (!neigh_lookup(&eg->table, next_hop_be, &nh_mac)){
-        DBG("No such neigh\n");
-        rte_pktmbuf_free(m); return 1;
+    if (arp_resolve(eg, next_hop_be, &nh_mac) < 0) {
+        DBG("ARP sent\n");
+        rte_pktmbuf_free(m);
+        return 1;
     }
     ip->time_to_live -= 1;
     ip->hdr_checksum = 0;
-    // ip->src_addr = wan->ip_be;
     ip->hdr_checksum = rte_ipv4_cksum(ip);
 
     rte_ether_addr_copy(&nh_mac,  &eth->dst_addr);

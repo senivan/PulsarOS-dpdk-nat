@@ -16,7 +16,7 @@
 int vdev_create(const char* progname, const struct app_config *conf){
     static char v0[128], v1[128];
 
-    const char *base[] = { (char*)progname, "-l", "0", "-n", "1", "--proc-type=auto" };
+    const char *base[] = { (char*)progname, "-l", "0-2", "-n", "1", "--proc-type=auto" };
     char *argv[16];
     int argc = 0;
     for (size_t i = 0; i < sizeof(base)/sizeof(base[0]); ++i) argv[argc++] = (char*)base[i];

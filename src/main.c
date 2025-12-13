@@ -23,15 +23,13 @@
 
 static volatile int keep_running = 1;
 
-static void
-on_sigint(int sig)
+static void on_sigint(int sig)
 {
     (void)sig;
     keep_running = 0;
 }
 
-static void
-wait_link(uint16_t port)
+static void wait_link(uint16_t port)
 {
     struct rte_eth_link link;
 
@@ -56,8 +54,7 @@ struct worker_ctx {
     struct nat_table    *nat;
 };
 
-static int
-lan_to_wan_loop(void *arg)
+static int lan_to_wan_loop(void *arg)
 {
     struct worker_ctx *ctx = (struct worker_ctx *)arg;
     const uint16_t BURST = 64;
@@ -69,10 +66,9 @@ lan_to_wan_loop(void *arg)
             continue;
 
         for (uint16_t i = 0; i < n; i++) {
-            rte_prefetch0(rte_pktmbuf_mtod(pkts[i], void *));
-        }
-
-        for (uint16_t i = 0; i < n; i++) {
+            if (i + 4 < n){
+                rte_prefetch0(rte_pktmbuf_mtod(pkts[i + 4], void *));
+            }
             struct rte_mbuf *m = pkts[i];
             const struct rte_ether_hdr *eth;
             uint16_t et, l3off;
@@ -113,8 +109,7 @@ lan_to_wan_loop(void *arg)
     return 0;
 }
 
-static int
-wan_to_lan_loop(void *arg)
+static int wan_to_lan_loop(void *arg)
 {
     struct worker_ctx *ctx = (struct worker_ctx *)arg;
     const uint16_t BURST = 64;
@@ -126,10 +121,9 @@ wan_to_lan_loop(void *arg)
             continue;
 
         for (uint16_t i = 0; i < n; i++) {
-            rte_prefetch0(rte_pktmbuf_mtod(pkts[i], void *));
-        }
-
-        for (uint16_t i = 0; i < n; i++) {
+            if (i + 4 < n){
+                rte_prefetch0(rte_pktmbuf_mtod(pkts[i + 4], void *));
+            }
             struct rte_mbuf *m = pkts[i];
             const struct rte_ether_hdr *eth;
             uint16_t et, l3off;
@@ -170,8 +164,7 @@ wan_to_lan_loop(void *arg)
     return 0;
 }
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
     if (argc < 3 || strcmp(argv[1], "--") != 0) {
         DBG("usage: natdpdk -- -c <config.yaml>\n");
